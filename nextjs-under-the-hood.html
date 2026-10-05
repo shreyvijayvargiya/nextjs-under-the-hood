@@ -1,0 +1,2539 @@
+<!DOCTYPE html>
+<!--
+  nextjs-under-the-hood.html
+  MIT License — Copyright (c) 2026 Contributors
+  Permission is hereby granted, free of charge, to use, copy, modify, merge,
+  publish, distribute, sublicense, and/or sell copies, subject to the above
+  copyright notice. Provided as-is for education; not affiliated with Vercel.
+  Single file: no build, no CDN, no npm. Open in any modern browser offline.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Interactive offline guide: how Next.js turns source code into routes, bundles, server components, Flight, hydration, and cache — explained simply with diagrams." />
+  <meta name="author" content="Open source contributors" />
+  <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f8f9fb" media="(prefers-color-scheme: light)" />
+  <meta property="og:title" content="Inside Next.js: From Source Code to Browser" />
+  <meta property="og:description" content="One HTML file. Fifteen interactive chapters on Next.js architecture." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Inside Next.js: From Source Code to Browser" />
+  <meta name="twitter:description" content="An interactive, visual guide to how Next.js works — routing, RSC, Flight, hydration, caching, middleware, streaming and more." />
+  <!-- To get a preview image on X: host a 1200x630 PNG and add <meta property="og:image" content="https://your-site/og.png" /> and <meta name="twitter:image" ...> -->
+  <title>Inside Next.js: From Source Code to Browser</title>
+  <style>
+    :root, [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #0a0a0a;
+      --bg-elevated: #111;
+      --bg-panel: #161616;
+      --border: #262626;
+      --border-hover: #404040;
+      --text: #ededed;
+      --text-muted: #a1a1a1;
+      --accent: #0070f3;
+      --accent-soft: rgba(0, 112, 243, 0.15);
+      --success: #50e3c2;
+      --warning: #f5a623;
+      --danger: #ff0080;
+      --graph-node: #161616;
+      --graph-node-stroke: #262626;
+      --graph-edge: #404040;
+      --hero-glow: rgba(0, 112, 243, 0.12);
+      --shadow: 0 8px 30px rgba(0, 0, 0, 0.45);
+      --kid-bg: rgba(80, 227, 194, 0.08);
+      --kid-border: rgba(80, 227, 194, 0.35);
+    }
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f8f9fb;
+      --bg-elevated: #ffffff;
+      --bg-panel: #ffffff;
+      --border: #e4e4e7;
+      --border-hover: #c4c4cc;
+      --text: #18181b;
+      --text-muted: #52525b;
+      --accent: #0070f3;
+      --accent-soft: rgba(0, 112, 243, 0.1);
+      --success: #0d9488;
+      --warning: #d97706;
+      --danger: #db2777;
+      --graph-node: #ffffff;
+      --graph-node-stroke: #e4e4e7;
+      --graph-edge: #a1a1aa;
+      --hero-glow: rgba(0, 112, 243, 0.08);
+      --shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+      --kid-bg: rgba(0, 112, 243, 0.06);
+      --kid-border: rgba(0, 112, 243, 0.25);
+    }
+    :root {
+      --radius: 12px;
+      --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+      --transition: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+    .skip-link {
+      position: absolute;
+      left: -999px;
+      top: 0.5rem;
+      z-index: 10002;
+      padding: 0.5rem 1rem;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 8px;
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+    .skip-link:focus { left: 0.5rem; outline: 2px solid var(--success); outline-offset: 2px; }
+    :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    .noise {
+      pointer-events: none;
+      position: fixed;
+      inset: 0;
+      opacity: 0.03;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      z-index: 9999;
+    }
+
+    header.hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 4rem 1.5rem;
+      position: relative;
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-glow {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, var(--hero-glow) 0%, transparent 70%);
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      animation: pulse 8s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; transform: translate(-50%, -50%) scale(1); }
+      50% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      background: var(--bg-elevated);
+    }
+    h1 {
+      font-size: clamp(2rem, 6vw, 3.75rem);
+      font-weight: 600;
+      letter-spacing: -0.03em;
+      margin: 0 0 1rem;
+      max-width: 900px;
+      line-height: 1.1;
+    }
+    .subtitle {
+      font-size: clamp(1rem, 2.5vw, 1.25rem);
+      color: var(--text-muted);
+      max-width: 640px;
+      margin: 0 auto 2.5rem;
+    }
+    .nav-toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+      max-width: 900px;
+    }
+    .nav-toc a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      transition: var(--transition);
+    }
+    .nav-toc a:hover {
+      color: var(--text);
+      border-color: var(--border);
+      background: var(--bg-elevated);
+    }
+    .nav-toc a.active {
+      color: var(--text);
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .sticky-toc {
+      position: sticky;
+      top: 0;
+      z-index: 9998;
+      display: none;
+      padding: 0.5rem 1rem;
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      overflow-x: auto;
+      white-space: nowrap;
+      gap: 0.35rem;
+    }
+    .sticky-toc.visible { display: flex; }
+    .sticky-toc a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.72rem;
+      padding: 0.35rem 0.6rem;
+      border-radius: 6px;
+      border: 1px solid transparent;
+    }
+    .sticky-toc a.active { color: var(--text); border-color: var(--accent); background: var(--accent-soft); }
+    .takeaway {
+      margin-top: 2rem;
+      padding: 1rem 1.15rem;
+      border-left: 3px solid var(--accent);
+      background: var(--bg-elevated);
+      border-radius: 0 var(--radius) var(--radius) 0;
+      max-width: 820px;
+    }
+    .takeaway h4 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+    .takeaway ul { margin: 0; padding-left: 1.2rem; color: var(--text-muted); font-size: 0.9rem; }
+    .glossary-search {
+      width: 100%;
+      max-width: 420px;
+      padding: 0.65rem 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.95rem;
+      margin-bottom: 1.25rem;
+    }
+    .glossary-grid {
+      display: grid;
+      gap: 0.75rem;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    }
+    .glossary-item {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+    }
+    .glossary-item dt { font-weight: 600; margin: 0 0 0.35rem; }
+    .glossary-item dd { margin: 0; font-size: 0.88rem; color: var(--text-muted); }
+    .glossary-item dd.simple { color: var(--text); font-size: 0.85rem; margin-bottom: 0.35rem; }
+    .oss-footer { max-width: 640px; margin: 1.5rem auto 0; text-align: left; line-height: 1.7; }
+    @media print {
+      .theme-fab, .sticky-toc, .noise, #scroll-progress, .nav-toc { display: none !important; }
+      section { break-inside: avoid; page-break-inside: avoid; }
+      body { background: #fff; color: #000; }
+    }
+
+    section {
+      padding: 5rem 1.5rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      border-bottom: 1px solid var(--border);
+    }
+    section:last-of-type { border-bottom: none; }
+    .section-label {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    h2 {
+      font-size: clamp(1.75rem, 4vw, 2.25rem);
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.75rem;
+    }
+    .section-desc {
+      color: var(--text-muted);
+      max-width: 720px;
+      margin-bottom: 1rem;
+      font-size: 1.05rem;
+    }
+    .kid-callout {
+      display: flex;
+      gap: 0.85rem;
+      align-items: flex-start;
+      padding: 1rem 1.15rem;
+      margin-bottom: 2rem;
+      max-width: 820px;
+      background: var(--kid-bg);
+      border: 1px solid var(--kid-border);
+      border-radius: var(--radius);
+      font-size: 0.95rem;
+      line-height: 1.55;
+    }
+    .kid-callout .emoji { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+    .kid-callout strong { color: var(--text); }
+    .kid-callout span { color: var(--text-muted); }
+    .learn-two {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    @media (max-width: 640px) { .learn-two { grid-template-columns: 1fr; } }
+    .learn-box {
+      padding: 0.85rem 1rem;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      font-size: 0.88rem;
+    }
+    .learn-box label {
+      display: block;
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--accent);
+      margin-bottom: 0.35rem;
+      font-weight: 600;
+    }
+    .theme-fab {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      z-index: 10001;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-elevated);
+      color: var(--text);
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      font-size: 1.15rem;
+      transition: var(--transition);
+    }
+    .theme-fab:hover { border-color: var(--accent); transform: scale(1.05); }
+    .chart-legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.75rem;
+    }
+    .chart-legend i {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 0.35rem;
+      vertical-align: middle;
+    }
+    .bar-chart { display: flex; flex-direction: column; gap: 0.65rem; margin-top: 1rem; }
+    .bar-row { display: grid; grid-template-columns: 90px 1fr 48px; gap: 0.5rem; align-items: center; font-size: 0.8rem; }
+    .bar-track { height: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
+    .bar-fill { height: 100%; border-radius: 999px; transition: width 0.5s ease; background: linear-gradient(90deg, var(--accent), var(--success)); }
+    .side-panel .simple-lead {
+      font-size: 1rem;
+      color: var(--text);
+      margin: 0 0 0.75rem;
+      line-height: 1.45;
+    }
+    .graph-canvas .graph-edge { stroke: var(--graph-edge); transition: stroke 0.2s; }
+    .graph-canvas .graph-edge.highlight { stroke: var(--accent); stroke-width: 2; opacity: 1; }
+
+    .card {
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .card:hover { border-color: var(--border-hover); }
+    .card-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    }
+
+    .btn {
+      font-family: inherit;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--bg-panel);
+      color: var(--text);
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-size: 0.875rem;
+      transition: var(--transition);
+    }
+    .btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.1); }
+
+    /* Pipeline */
+    .pipeline-wrap {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 1.5rem;
+      align-items: start;
+    }
+    @media (max-width: 900px) {
+      .pipeline-wrap { grid-template-columns: 1fr; }
+    }
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0;
+    }
+    .pipe-node {
+      width: 100%;
+      max-width: 420px;
+      padding: 1rem 1.25rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      text-align: center;
+      font-weight: 500;
+      position: relative;
+      transition: var(--transition);
+      animation: fadeUp 0.6s ease backwards;
+    }
+    .pipe-node:nth-child(odd) { animation-delay: calc(var(--i, 0) * 0.05s); }
+    .pipe-node:hover, .pipe-node.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent-soft);
+      transform: translateY(-2px);
+    }
+    .pipe-arrow {
+      width: 2px;
+      height: 28px;
+      background: linear-gradient(var(--border), var(--accent));
+      opacity: 0.5;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .side-panel {
+      position: sticky;
+      top: 1.5rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.5rem;
+      min-height: 280px;
+      box-shadow: var(--shadow);
+    }
+    .side-panel h3 { margin: 0 0 0.75rem; font-size: 1.1rem; }
+    .side-panel p, .side-panel li { color: var(--text-muted); font-size: 0.9rem; }
+    .side-panel ul { padding-left: 1.2rem; margin: 0.5rem 0; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.75rem; }
+    .tag {
+      font-size: 0.7rem;
+      font-family: var(--mono);
+      padding: 0.2rem 0.5rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-muted);
+    }
+
+    /* File tree */
+    .split-view {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) { .split-view { grid-template-columns: 1fr; } }
+    .tree, .code-block {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+      overflow: auto;
+      max-height: 320px;
+    }
+    .tree-item {
+      padding: 0.25rem 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .tree-item:hover, .tree-item.selected {
+      background: var(--accent-soft);
+      color: var(--accent);
+    }
+    .tree-indent { padding-left: 1rem; }
+
+    /* Graph */
+    .graph-canvas {
+      width: 100%;
+      height: 380px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg);
+    }
+    .metrics {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+    .metric {
+      flex: 1;
+      min-width: 120px;
+      padding: 1rem;
+      background: var(--bg-panel);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    .metric-value { font-size: 1.5rem; font-weight: 600; color: var(--accent); }
+    .metric-label { font-size: 0.75rem; color: var(--text-muted); }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 0.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
+    .tab {
+      padding: 0.5rem 1rem;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-muted);
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 0.85rem;
+      transition: var(--transition);
+    }
+    .tab.active {
+      background: var(--accent-soft);
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+    pre.code {
+      margin: 0;
+      padding: 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      line-height: 1.5;
+      max-height: 280px;
+    }
+
+    .ast-tree { font-family: var(--mono); font-size: 0.75rem; }
+    .ast-node { margin-left: 1rem; border-left: 1px solid var(--border); padding-left: 0.75rem; margin-top: 0.25rem; }
+
+    /* RSC simulation */
+    .rsc-stage {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 1rem;
+      align-items: center;
+      min-height: 280px;
+    }
+    @media (max-width: 768px) {
+      .rsc-stage { grid-template-columns: 1fr; }
+    }
+    .zone {
+      padding: 1.5rem;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      text-align: center;
+      position: relative;
+    }
+    .zone.server { border-color: var(--accent); }
+    .zone.browser { border-color: var(--success); }
+    .packet {
+      width: 12px;
+      height: 12px;
+      background: var(--accent);
+      border-radius: 50%;
+      position: absolute;
+      animation: fly 2s ease-in-out infinite;
+    }
+    @keyframes fly {
+      0% { left: 10%; opacity: 0; }
+      20% { opacity: 1; }
+      80% { opacity: 1; }
+      100% { left: 90%; opacity: 0; }
+    }
+
+    .compare-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    @media (max-width: 600px) { .compare-grid { grid-template-columns: 1fr; } }
+
+    /* Client boundary */
+    .component-tree { font-family: var(--mono); font-size: 0.85rem; }
+    .client-boundary {
+      border: 2px solid var(--warning);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin: 0.5rem 0 0 1rem;
+      background: rgba(245, 166, 35, 0.08);
+    }
+    .bundle-meter {
+      height: 8px;
+      background: var(--bg);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+    .bundle-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--warning));
+      transition: width 0.5s ease;
+    }
+
+    /* Flight */
+    .flight-viz {
+      display: grid;
+      grid-template-columns: 1fr 80px 1fr;
+      gap: 1rem;
+      align-items: stretch;
+    }
+    @media (max-width: 768px) { .flight-viz { grid-template-columns: 1fr; } }
+    .flight-stream {
+      height: 200px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      position: relative;
+      overflow: hidden;
+    }
+    .flight-packet {
+      position: absolute;
+      width: 40px;
+      height: 24px;
+      background: var(--accent);
+      border-radius: 4px;
+      font-size: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: stream 3s linear infinite;
+    }
+    @keyframes stream {
+      from { left: -50px; top: 20%; }
+      to { left: calc(100% + 50px); top: 60%; }
+    }
+
+    /* Chunks */
+    .chunk-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+    }
+    .chunk {
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: var(--transition);
+      text-align: center;
+    }
+    .chunk.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .module-toggle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin: 1rem 0;
+    }
+    .module-chip {
+      padding: 0.35rem 0.65rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .module-chip.on { background: var(--accent-soft); border-color: var(--accent); }
+
+    /* Webpack vs Turbopack */
+    .bundler-compare {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    @media (max-width: 768px) { .bundler-compare { grid-template-columns: 1fr; } }
+    .rebuild-bar {
+      height: 24px;
+      background: var(--bg);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-top: 0.75rem;
+    }
+    .rebuild-fill {
+      height: 100%;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+    .rebuild-fill.webpack { background: var(--danger); }
+    .rebuild-fill.turbo { background: var(--success); }
+
+    /* .next explorer */
+    .folder-tree .folder {
+      cursor: pointer;
+      padding: 0.35rem 0.5rem;
+      border-radius: 6px;
+    }
+    .folder:hover, .folder.open { background: var(--accent-soft); }
+
+    /* Request lifecycle */
+    .lifecycle {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 2rem 0;
+    }
+    .life-node {
+      padding: 0.75rem 1.25rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: var(--transition);
+    }
+    .life-node.active { border-color: var(--accent); box-shadow: 0 0 20px var(--accent-soft); }
+    .life-arrow { color: var(--text-muted); font-size: 1.25rem; }
+
+    /* Hydration */
+    .hydration-demo {
+      text-align: center;
+      padding: 2rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+    }
+    .demo-btn {
+      padding: 0.75rem 1.5rem;
+      font-size: 1rem;
+      border-radius: 8px;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .demo-btn:not(.hydrated) {
+      opacity: 0.85;
+      cursor: not-allowed;
+      filter: grayscale(0.3);
+    }
+    .demo-btn.hydrated { cursor: pointer; animation: pop 0.4s ease; }
+    @keyframes pop {
+      0% { transform: scale(0.95); }
+      50% { transform: scale(1.05); }
+      100% { transform: scale(1); }
+    }
+    .status-pill {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.35rem 0.85rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+    }
+    .status-pill.hydrated { border-color: var(--success); color: var(--success); }
+
+    /* Cache */
+    .cache-timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .cache-step {
+      display: grid;
+      grid-template-columns: 100px 1fr;
+      gap: 1rem;
+      align-items: center;
+      padding: 1rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      opacity: 0.4;
+      transition: var(--transition);
+    }
+    .cache-step.visible { opacity: 1; }
+    .cache-hit { border-color: var(--success); }
+    .cache-miss { border-color: var(--warning); }
+
+    /* Builder */
+    .builder-slots {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin: 1.5rem 0;
+    }
+    .slot {
+      min-height: 80px;
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+    .slot.filled {
+      border-style: solid;
+      border-color: var(--accent);
+      background: var(--accent-soft);
+      color: var(--text);
+    }
+    .piece-bank {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .piece {
+      padding: 0.5rem 0.85rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: grab;
+      font-size: 0.85rem;
+    }
+
+    /* Summary roadmap */
+    .roadmap {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.5rem;
+      margin: 2rem 0;
+    }
+    .road-step {
+      padding: 0.6rem 1rem;
+      background: var(--bg-panel);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      font-size: 0.8rem;
+      animation: fadeUp 0.5s ease backwards;
+    }
+
+    footer {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+
+    svg.icon-inline { vertical-align: middle; margin-right: 0.35rem; }
+    .lifecycle-svg { width: 100%; max-width: 900px; margin: 0 auto 1rem; display: block; }
+    .pipe-node .pipe-sub { display: block; font-size: 0.72rem; font-weight: 400; color: var(--text-muted); margin-top: 0.25rem; }
+
+    /* Bonus chapters (additive) */
+    .bx-row{display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 1rem}
+    .bx-out{padding:1rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-panel);font-size:.9rem;margin-top:1rem}
+    .bx-out b.ok{color:var(--success)} .bx-out b.warn{color:var(--warning)} .bx-out b.bad{color:var(--danger)}
+    .bx-steps{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem}
+    .bx-step{padding:.5rem .8rem;border:1px solid var(--border);border-radius:8px;font-size:.8rem;color:var(--text-muted);transition:var(--transition)}
+    .bx-step.on{border-color:var(--accent);color:var(--text);background:var(--accent-soft)}
+    .bx-track{height:10px;border-radius:99px;background:var(--border);overflow:hidden;margin:.25rem 0 .75rem}
+    .bx-fill{height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--success))}
+    .bx-label{display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-muted)}
+
+    /* Share & readability (additive) */
+    section p.section-desc, section .kid-callout, .takeaway{max-width:760px}
+    section p.section-desc{font-size:1.05rem}
+    .takeaway li{line-height:1.75}
+    .sh-bar{display:flex;flex-wrap:wrap;gap:.5rem;margin:.25rem 0 1rem}
+    .sh-btn{font:inherit;font-size:.75rem;padding:.3rem .7rem;border:1px solid var(--border);border-radius:999px;background:var(--bg-elevated);color:var(--text-muted);cursor:pointer;text-decoration:none;transition:var(--transition)}
+    .sh-btn:hover{border-color:var(--accent);color:var(--text)}
+    .th-card{position:relative;padding:1rem 1rem 1rem 3rem;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-panel);margin-bottom:.6rem;max-width:760px}
+    .th-card .n{position:absolute;left:1rem;top:1rem;font-family:var(--mono);color:var(--accent);font-weight:600}
+    .th-card p{margin:0 0 .5rem;white-space:pre-line}
+    .th-card small{color:var(--text-muted)}
+    .sh-fab{position:fixed;left:1rem;bottom:1rem;z-index:10001;box-shadow:var(--shadow)}
+    .read-time{font-size:.8rem;color:var(--text-muted);margin:0 0 1rem}
+
+    /* Beginner picture guides (additive) */
+    details.eli5{max-width:760px;margin:0 0 1rem;padding:.9rem 1rem;border:2px dashed var(--kid-border);border-radius:var(--radius);background:var(--kid-bg)}
+    details.eli5 summary{cursor:pointer;font-weight:700;font-size:1rem}
+    details.eli5 ol{margin:.75rem 0 0;padding:0;list-style:none;display:grid;gap:.5rem}
+    details.eli5 li{display:flex;gap:.6rem;align-items:flex-start;font-size:1.02rem;line-height:1.5}
+    details.eli5 li span.e{font-size:1.6rem;line-height:1}
+    details.eli5 .big{margin:.75rem 0 0;font-size:1.05rem;font-weight:600}
+  </style>
+  <script type="application/ld+json">
+  {"@context":"https://schema.org","@type":"LearningResource","name":"Inside Next.js: From Source Code to Browser","description":"Interactive offline explainer for Next.js architecture.","learningResourceType":"Interactive guide","isAccessibleForFree":true,"inLanguage":"en","version":"1.0.0"}
+  </script>
+</head>
+<body data-theme="dark">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <button type="button" class="theme-fab" id="theme-toggle" aria-label="Switch light or dark theme" title="Toggle theme">🌙</button>
+  <nav class="sticky-toc" id="sticky-toc" aria-label="Quick section jump"></nav>
+  <div class="noise" aria-hidden="true"></div>
+
+  <header class="hero" id="top">
+    <div class="hero-glow" aria-hidden="true"></div>
+    <div class="badge">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+      v1.0 · MIT · Single HTML · Offline
+    </div>
+    <h1>Inside Next.js: From Source Code to Browser</h1>
+    <p class="subtitle">A friendly, click-along story: how your code becomes a website kids (and grown-ups) can use.</p>
+    <p class="kid-callout" style="max-width:640px;margin:0 auto 2rem;text-align:left">
+      <span class="emoji">👋</span>
+      <span><strong>Start here:</strong> Next.js is like a <strong>helper robot</strong> that reads your folders, builds your pages, sends them to the computer in the cloud, and makes buttons work in the browser. Tap each section — we explain the hard words with simple pictures.</span>
+    </p>
+    <nav class="nav-toc" aria-label="Sections">
+      <a href="#thread">Thread</a>
+      <a href="#s1">Pipeline</a>
+      <a href="#s2">Routes</a>
+      <a href="#s3">Graph</a>
+      <a href="#s4">SWC</a>
+      <a href="#s5">RSC</a>
+      <a href="#s6">Client</a>
+      <a href="#s7">Flight</a>
+      <a href="#s8">Bundles</a>
+      <a href="#s9">Turbo</a>
+      <a href="#s10">.next</a>
+      <a href="#s11">Request</a>
+      <a href="#s12">Hydrate</a>
+      <a href="#s13">Cache</a>
+      <a href="#s14">Build</a>
+      <a href="#s15">Summary</a>
+      <a href="#b1">Middleware</a>
+      <a href="#b2">Actions</a>
+      <a href="#b3">Streaming</a>
+      <a href="#b4">Rendering</a>
+      <a href="#b5">Runtimes</a>
+      <a href="#s16">Glossary</a>
+    </nav>
+  </header>
+
+  <main id="main">
+
+  <!-- SHAREABLE THREAD -->
+  <section id="thread">
+    <div class="section-label">Start here</div>
+    <h2>The 60-second version</h2>
+    <p class="section-desc">Short on time? Here is the whole guide as a tweet-sized thread. Copy one, or copy all.</p>
+    <p class="read-time" id="read-time"></p>
+    <div class="sh-bar"><button type="button" class="sh-btn" id="th-all">Copy whole thread</button><a class="sh-btn" id="th-first" target="_blank" rel="noopener">Post first tweet on X</a></div>
+    <div id="th-list"></div>
+  </section>
+
+
+  <!-- SECTION 1 -->
+  <section id="s1">
+    <div class="section-label">Section 1</div>
+    <h2>The Big Picture</h2>
+    <p class="section-desc">Ten steps from “I wrote code” to “The page works when I click.” Tap each step on the left.</p>
+    <div class="kid-callout"><span class="emoji">🗺️</span><span><strong>Like a factory line:</strong> Your code rides on a conveyor belt. Each station does one job — find pages, connect pieces, translate for computers, pack suitcases (bundles), and deliver to the browser.</span></div>
+    <svg viewBox="0 0 800 200" style="width:100%;max-width:800px;margin:0 auto 2rem;display:block" aria-hidden="true">
+      <defs>
+        <linearGradient id="pipeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stop-color="#0070f3" stop-opacity="0.2"/>
+          <stop offset="50%" stop-color="#0070f3" stop-opacity="0.6"/>
+          <stop offset="100%" stop-color="#50e3c2" stop-opacity="0.2"/>
+        </linearGradient>
+      </defs>
+      <rect x="40" y="80" width="720" height="40" rx="20" fill="url(#pipeGrad)" stroke="#262626"/>
+      <circle cx="80" cy="100" r="6" fill="#0070f3"><animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/></circle>
+      <circle cx="720" cy="100" r="6" fill="#50e3c2"><animate attributeName="opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite"/></circle>
+      <text x="400" y="105" text-anchor="middle" fill="#a1a1a1" font-size="12" font-family="system-ui">End-to-end data flow</text>
+    </svg>
+    <div class="pipeline-wrap">
+      <div class="pipeline" id="pipeline"></div>
+      <aside class="side-panel" id="pipeline-panel">
+        <h3>Pick a station</h3>
+        <p class="simple-lead">Click a box to see what happens in kid words and grown-up words.</p>
+      </aside>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Next.js is a <strong>pipeline</strong>, not one magic box — each step has a clear job.</li>
+        <li>Most data work stays on the <strong>server</strong>; the browser gets HTML first, JS only where needed.</li>
+        <li>Production output lives in <strong>.next</strong> after <code>next build</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 2 -->
+  <section id="s2">
+    <div class="section-label">Section 2</div>
+    <h2>Route Discovery</h2>
+    <p class="section-desc">Folder names on your computer become website addresses (URLs).</p>
+    <div class="kid-callout"><span class="emoji">📁</span><span><strong>Like room labels:</strong> If you put a page in folder <code>about</code>, the website gets an <code>/about</code> door. Next.js walks your <code>app/</code> folder like a librarian with a map.</span></div>
+    <div class="split-view">
+      <div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.5rem">File tree — click a file</p>
+        <div class="tree" id="route-tree"></div>
+      </div>
+      <div>
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.5rem">Generated route manifest</p>
+        <pre class="code" id="route-manifest"></pre>
+      </div>
+    </div>
+    <div class="side-panel" style="margin-top:1.5rem;position:static" id="route-explain">
+      <h3>Route mapping</h3>
+      <p>Folder names become URL segments. <code>page.tsx</code> marks a routable page. Dynamic segments use <code>[param]</code>.</p>
+    </div>
+    <div class="card-grid" style="margin-top:1.5rem">
+      <div class="card"><strong>page.tsx</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">The actual screen for a URL</p></div>
+      <div class="card"><strong>layout.tsx</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Wrapper shared by pages in that folder</p></div>
+      <div class="card"><strong>loading.tsx</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Spinner while the page prepares</p></div>
+      <div class="card"><strong>route groups (folder)</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Organize files without changing the URL</p></div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>No central routes file — the <strong>folder tree is the map</strong>.</li>
+        <li>Special filenames (<code>layout</code>, <code>loading</code>, <code>error</code>) add behavior around <code>page</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 3 -->
+  <section id="s3">
+    <div class="section-label">Section 3</div>
+    <h2>Dependency Graph</h2>
+    <p class="section-desc">Pages use pieces (components). Pieces can use smaller pieces. That’s a “who needs who” map.</p>
+    <div class="kid-callout"><span class="emoji">🧩</span><span><strong>Like LEGO instructions:</strong> The big page is built from Header, Hero, and Dashboard blocks. Dashboard needs Chart and Table. Click a circle to light up everything it needs.</span></div>
+    <svg class="graph-canvas" id="dep-graph" role="img" aria-label="Dependency graph"></svg>
+    <div class="chart-legend" id="dep-legend">
+      <span><i style="background:var(--accent)"></i>Selected</span>
+      <span><i style="background:var(--graph-edge)"></i>Uses another piece</span>
+    </div>
+    <div class="metrics" id="dep-metrics"></div>
+    <div class="side-panel" style="margin-top:1rem;position:static" id="dep-panel">
+      <h3>Dependencies</h3>
+      <p>Click a module in the graph.</p>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Every <code>import</code> is an edge in the graph — the bundler walks it from each page.</li>
+        <li>Shared imports become <strong>shared chunks</strong>; duplicate heavy deps inflate download size.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 4 -->
+  <section id="s4">
+    <div class="section-label">Section 4</div>
+    <h2>SWC Compiler</h2>
+    <p class="section-desc">Browsers don’t speak JSX. SWC translates your code super fast.</p>
+    <div class="kid-callout"><span class="emoji">🗣️</span><span><strong>Like a translator:</strong> You write in JSX (mix of HTML-ish tags and JavaScript). SWC turns it into plain JavaScript the browser understands — and shrinks it for the trip.</span></div>
+    <div class="tabs" id="swc-tabs"></div>
+    <div id="swc-panels"></div>
+    <div class="card" style="margin-top:1.5rem">
+      <p style="margin:0 0 1rem;font-size:0.9rem;color:var(--text-muted)">Compiler pipeline — click to animate</p>
+      <div style="display:flex;flex-wrap:wrap;gap:0.5rem" id="swc-stages"></div>
+      <p id="swc-stage-desc" style="margin-top:1rem;color:var(--text-muted);font-size:0.9rem"></p>
+      <div class="rebuild-bar" style="margin-top:0.75rem" aria-hidden="true"><div class="rebuild-fill turbo" id="swc-progress" style="width:0%"></div></div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>SWC replaces slower JS-based compilers for most Next.js transforms.</li>
+        <li>Dev = readable code; production = <strong>minified</strong> output in <code>.next</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 5 -->
+  <section id="s5">
+    <div class="section-label">Section 5</div>
+    <h2>React Server Components</h2>
+    <p class="section-desc">Some work happens on a big computer far away — not in your pocket phone browser.</p>
+    <div class="kid-callout"><span class="emoji">🏫</span><span><strong>Like homework at school:</strong> The server (school) asks the database (library) for facts, builds the page, and sends you the finished poster. Your browser just hangs it on the wall.</span></div>
+    <div class="rsc-stage">
+      <div class="zone browser"><strong>🖥️ Browser</strong><br><span style="font-size:0.8rem;color:var(--text-muted)">Gets the finished poster (HTML)</span></div>
+      <div style="position:relative;height:60px;min-width:80px">
+        <div class="packet" style="top:24px"></div>
+        <span style="position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);font-size:0.65rem;color:var(--text-muted)">sends →</span>
+      </div>
+      <div class="zone server" style="position:relative">
+        <strong>🏫 Server</strong><br><span style="font-size:0.8rem;color:var(--text-muted)">Cooks the page</span>
+        <div style="margin-top:0.75rem;padding:0.5rem;border-radius:8px;border:1px dashed var(--border);font-size:0.75rem;color:var(--text-muted)">📚 Database (library) sits behind the server — only the server may visit</div>
+      </div>
+    </div>
+    <pre class="code" style="margin-top:1rem">async function Page() {
+  const posts = await db.posts.findMany()
+  return &lt;PostList posts={posts} /&gt;
+}</pre>
+    <button class="btn btn-primary" type="button" id="rsc-animate" style="margin-top:1rem">Run simulation</button>
+    <div class="compare-grid">
+      <div class="card">
+        <h4 style="margin:0 0 0.5rem">🏫 Server Component</h4>
+        <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:0.9rem">
+          <li>Cooks in the kitchen (server)</li>
+          <li>Can ask the library (database)</li>
+          <li>Doesn’t add weight to your backpack (no extra JS)</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4 style="margin:0 0 0.5rem">🎮 Client Component</h4>
+        <ul style="margin:0;padding-left:1.2rem;color:var(--text-muted);font-size:0.9rem">
+          <li>Runs on your device</li>
+          <li>Clicks, typing, animations</li>
+          <li>Ships JavaScript in the download</li>
+        </ul>
+      </div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Default in App Router: components are <strong>Server Components</strong> unless you say otherwise.</li>
+        <li>Server code can use secrets and databases; it never ships as source to the client.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 6 -->
+  <section id="s6">
+    <div class="section-label">Section 6</div>
+    <h2>Client Components</h2>
+    <p class="section-desc">Interactive bits (clicks, typing) need JavaScript downloaded to the browser.</p>
+    <div class="kid-callout"><span class="emoji">🎮</span><span><strong>Like a remote control:</strong> <code>"use client"</code> means “this part needs buttons that work on your device.” More client parts = bigger download (heavier backpack).</span></div>
+    <div class="split-view">
+      <div class="component-tree" id="client-tree"></div>
+      <div class="card">
+        <h4 style="margin:0 0 0.5rem">Estimated bundle</h4>
+        <p style="font-size:2rem;margin:0;font-weight:600" id="bundle-kb">0 KB</p>
+        <div class="bundle-meter"><div class="bundle-meter-fill" id="bundle-fill" style="width:0%"></div></div>
+        <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.75rem">Toggle client components below</p>
+        <div class="module-toggle" id="client-toggles"></div>
+      </div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Put <code>"use client"</code> only on components that need browser APIs, state, or effects.</li>
+        <li>Client boundaries pull in <strong>JavaScript cost</strong> — keep them small and low in the tree when possible.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 7 -->
+  <section id="s7">
+    <div class="section-label">Section 7</div>
+    <h2>React Flight</h2>
+    <p class="section-desc">The server sends recipe cards, not the whole kitchen.</p>
+    <div class="kid-callout"><span class="emoji">✈️</span><span><strong>Like airplane snacks:</strong> Flight sends small numbered messages (“put a Hero here, pass these props”). The browser follows the recipe. Your secret server code never flies over.</span></div>
+    <div class="flight-viz">
+      <div class="card">
+        <h4 style="margin:0 0 0.75rem">Component tree</h4>
+        <pre class="code" style="max-height:160px;border:none;padding:0;background:transparent">Page
+├ Hero
+├ Sidebar
+└ Dashboard</pre>
+      </div>
+      <div class="flight-stream" id="flight-stream"></div>
+      <div class="card">
+        <h4 style="margin:0 0 0.75rem">Payload inspector</h4>
+        <pre class="code" id="flight-payload" style="max-height:160px;font-size:0.7rem">M1:{"id":"./Hero","chunks":["M2"]}
+M2:["$","section",null,{"children":"..."}]</pre>
+      </div>
+    </div>
+    <button class="btn" type="button" id="flight-send" style="margin-top:1rem">Send Flight packets</button>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Flight is React’s wire format for Server Components — a stream of instructions, not TSX source.</li>
+        <li>The client reconciler builds UI from Flight + existing client component modules.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 8 -->
+  <section id="s8">
+    <div class="section-label">Section 8</div>
+    <h2>Bundling</h2>
+    <p class="section-desc">Pack JavaScript into suitcases (chunks) so visitors download only what they need.</p>
+    <div class="kid-callout"><span class="emoji">🧳</span><span><strong>Like packing for trips:</strong> Shared clothes go in one bag (shared.js). Dashboard toys go in another. Turn pieces on/off and watch the suitcases change size.</span></div>
+    <div class="module-toggle" id="bundle-modules"></div>
+    <div class="chunk-grid" id="chunk-output"></div>
+    <div class="bar-chart" id="chunk-bars"></div>
+    <div class="metrics" id="bundle-stats"></div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Code splitting = many small files instead of one giant download.</li>
+        <li>Shared UI (header/footer) should land in a <strong>shared chunk</strong> cached across routes.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 9 -->
+  <section id="s9">
+    <div class="section-label">Section 9</div>
+    <h2>Webpack vs Turbopack</h2>
+    <p class="section-desc">When you change one file, how much does the tool rebuild?</p>
+    <div class="kid-callout"><span class="emoji">🔄</span><span><strong>Like cleaning your room:</strong> Webpack sometimes cleans the <em>whole</em> room. Turbopack mostly tidies the one corner you touched — so you wait less while coding.</span></div>
+    <textarea class="code" id="header-edit" rows="4" style="width:100%;resize:vertical;margin-bottom:1rem">export function Header() {
+  return &lt;header&gt;Site&lt;/header&gt;
+}</textarea>
+    <button class="btn btn-primary" type="button" id="trigger-rebuild">Save Header.tsx</button>
+    <div class="bundler-compare" style="margin-top:1.5rem">
+      <div class="card">
+        <h4 style="margin:0">Webpack</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted)">Often rebuilds the whole neighborhood</p>
+        <div class="rebuild-bar"><div class="rebuild-fill webpack" id="bar-webpack"></div></div>
+        <p id="time-webpack" style="font-family:var(--mono);margin-top:0.5rem">— ms</p>
+      </div>
+      <div class="card">
+        <h4 style="margin:0">Turbopack</h4>
+        <p style="font-size:0.85rem;color:var(--text-muted)">Mostly rebuilds the one house you touched</p>
+        <div class="rebuild-bar"><div class="rebuild-fill turbo" id="bar-turbo"></div></div>
+        <p id="time-turbo" style="font-family:var(--mono);margin-top:0.5rem">— ms</p>
+      </div>
+    </div>
+    <p style="font-size:0.85rem;color:var(--text-muted);margin-top:1rem">Simulated dev rebuild after editing one file. Real times vary by project size.</p>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Turbopack (dev) targets incremental rebuilds; Webpack remains common in production tooling history.</li>
+        <li>Fast feedback loops matter as much as production bundle size.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 10 -->
+  <section id="s10">
+    <div class="section-label">Section 10</div>
+    <h2>Build Output</h2>
+    <p class="section-desc">After <code>next build</code>, Next.js leaves a <code>.next</code> folder — the packed lunch for production.</p>
+    <div class="kid-callout"><span class="emoji">📦</span><span><strong>Like a lunchbox:</strong> Server food, static snacks, and a map (manifest) so the app knows where everything lives.</span></div>
+    <div class="split-view">
+      <div class="tree folder-tree" id="next-tree"></div>
+      <pre class="code" id="next-preview">Select a folder or file</pre>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Never edit <code>.next</code> by hand — it is regenerated by <code>next dev</code> / <code>next build</code>.</li>
+        <li>Manifests tell the runtime where routes and assets live in production.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 11 -->
+  <section id="s11">
+    <div class="section-label">Section 11</div>
+    <h2>Request Lifecycle</h2>
+    <p class="section-desc">What happens when someone visits your site — step by step.</p>
+    <div class="kid-callout"><span class="emoji">📬</span><span><strong>Like sending a letter:</strong> Browser asks → maybe CDN helps → Next server thinks → database answers → HTML comes back → browser wakes up React (hydration).</span></div>
+    <svg class="lifecycle-svg" id="lifecycle-chart" viewBox="0 0 880 130" aria-hidden="true"></svg>
+    <div class="lifecycle" id="lifecycle"></div>
+    <div class="side-panel" style="margin-top:1rem;position:static" id="lifecycle-panel">
+      <h3>Request flow</h3>
+      <p>Click a node to see details.</p>
+    </div>
+    <button class="btn" type="button" id="lifecycle-play" style="margin-top:1rem">Animate request</button>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>One page view can touch CDN, server, database, and client — know which step you are debugging.</li>
+        <li>Streaming lets users see HTML before all data finishes loading.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 12 -->
+  <section id="s12">
+    <div class="section-label">Section 12</div>
+    <h2>Hydration Simulator</h2>
+    <p class="section-desc">The page <em>looks</em> ready before buttons truly work.</p>
+    <div class="kid-callout"><span class="emoji">🖼️</span><span><strong>Like a picture of a button:</strong> First you see the button (HTML). Hydration is React plugging in the wires so clicks actually do something.</span></div>
+    <div class="hydration-demo">
+      <button type="button" class="demo-btn" id="hydrate-btn">Click me</button>
+      <p id="hydrate-msg" style="color:var(--text-muted);font-size:0.9rem;margin:1rem 0 0">The button is only a picture right now — try clicking it!</p>
+      <button class="btn btn-primary" type="button" id="hydrate-trigger">Hydrate</button>
+      <div class="status-pill" id="hydrate-status">Status: SSR HTML only</div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Hydration mismatch errors mean server HTML and client render disagree — fix the diff, don’t ignore warnings.</li>
+        <li>Only Client Components need hydration for interactivity.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 13 -->
+  <section id="s13">
+    <div class="section-label">Section 13</div>
+    <h2>Cache System</h2>
+    <p class="section-desc">Remember answers so you don’t ask the library the same question every second.</p>
+    <div class="kid-callout"><span class="emoji">🐘</span><span><strong>Like an elephant’s memory:</strong> First visit = slow (cache miss, go to database). Second visit = fast (cache hit, use saved answer).</span></div>
+    <div class="cache-timeline" id="cache-timeline"></div>
+    <button class="btn" type="button" id="cache-run" style="margin-top:1rem">Simulate two requests</button>
+    <div class="card-grid" style="margin-top:1.5rem">
+      <div class="card"><strong>Route Cache</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Remembers whole pages that don’t change often</p></div>
+      <div class="card"><strong>Fetch Cache</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Don’t ask the same API twice in one cook session</p></div>
+      <div class="card"><strong>Image Cache</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Keeps resized photos ready nearby</p></div>
+      <div class="card"><strong>ISR Cache</strong><p style="font-size:0.85rem;color:var(--text-muted);margin:0.5rem 0 0">Old page stays fast while a fresh one bakes behind the scenes</p></div>
+    </div>
+    <svg viewBox="0 0 600 100" style="width:100%;max-width:600px;margin-top:1.5rem;color:var(--text)" aria-label="Cache hit vs miss">
+      <rect x="20" y="20" width="250" height="60" rx="8" fill="none" stroke="var(--warning)" stroke-width="2"/>
+      <text x="145" y="45" text-anchor="middle" fill="currentColor" font-size="12" font-family="system-ui">Request 1 · MISS</text>
+      <text x="145" y="62" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="system-ui">→ database</text>
+      <rect x="330" y="20" width="250" height="60" rx="8" fill="none" stroke="var(--success)" stroke-width="2"/>
+      <text x="455" y="45" text-anchor="middle" fill="currentColor" font-size="12" font-family="system-ui">Request 2 · HIT</text>
+      <text x="455" y="62" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="system-ui">→ memory</text>
+      <path d="M270 50 H330" stroke="var(--graph-edge)" stroke-width="2" marker-end="url(#arrCache)"/>
+      <defs><marker id="arrCache" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="currentColor" opacity="0.5"/></marker></defs>
+    </svg>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Caching is a tradeoff: speed vs freshness — configure <code>revalidate</code> and <code>fetch</code> options on purpose.</li>
+        <li>“Stale data” bugs often mean cache rules, not React bugs.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 14 -->
+  <section id="s14">
+    <div class="section-label">Section 14</div>
+    <h2>Build Your Own Next.js</h2>
+    <p class="section-desc">Next.js is really six jobs. Match each job to its slot.</p>
+    <div class="kid-callout"><span class="emoji">🏗️</span><span><strong>Like building with blocks:</strong> Routing = signs, Compiler = translator, Bundler = suitcases, Runtime = worker, Renderer = artist, Cache = memory.</span></div>
+    <div class="piece-bank" id="piece-bank"></div>
+    <div class="builder-slots" id="builder-slots"></div>
+    <p id="builder-result" style="color:var(--text-muted);font-size:0.95rem"></p>
+    <div class="card" style="margin-top:1rem">
+      <strong>Suggested stack</strong>
+      <div class="tag-list">
+        <span class="tag">Hono</span><span class="tag">React</span><span class="tag">SWC</span><span class="tag">Rspack</span><span class="tag">Redis</span>
+      </div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul>
+        <li>Frameworks combine routing, compile, bundle, run, render, and cache — Next.js packages opinions for React apps.</li>
+        <li>You could swap pieces (e.g. different bundler) but you inherit integration cost.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SECTION 15 -->
+  <section id="s15">
+    <div class="section-label">Section 15</div>
+    <h2>Final Summary</h2>
+    <p class="section-desc">You made it! Here’s the whole story in one breath.</p>
+    <div class="kid-callout"><span class="emoji">⭐</span><span><strong>Remember:</strong> Folders → map → connect pieces → translate → server builds → send recipes → pack JS → browser shows → hydrate clicks → cache for speed.</span></div>
+    <div class="roadmap" id="summary-roadmap"></div>
+    <div class="card-grid">
+      <div class="card"><h4 style="margin:0 0 0.5rem">📁 Folders = URLs</h4><p style="margin:0;font-size:0.9rem;color:var(--text-muted)">Put pages in the right folder and the address appears by magic (convention).</p></div>
+      <div class="card"><h4 style="margin:0 0 0.5rem">🏫 Server does heavy lifting</h4><p style="margin:0;font-size:0.9rem;color:var(--text-muted)">Fetch data on the server; send HTML first, JavaScript only for interactive toys.</p></div>
+      <div class="card"><h4 style="margin:0 0 0.5rem">✈️ Flight = recipe cards</h4><p style="margin:0;font-size:0.9rem;color:var(--text-muted)">Instructions cross the wire — not your whole secret codebase.</p></div>
+      <div class="card"><h4 style="margin:0 0 0.5rem">🐘 Cache = memory</h4><p style="margin:0;font-size:0.9rem;color:var(--text-muted)">Save answers so the next visitor gets a speedy reply.</p></div>
+    </div>
+    <svg viewBox="0 0 400 120" style="width:100%;max-width:500px;margin:2rem auto;display:block;color:var(--text)" aria-hidden="true">
+      <defs><linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#0070f3"/><stop offset="100%" stop-color="#50e3c2"/></linearGradient></defs>
+      <rect x="20" y="40" width="360" height="40" rx="8" fill="none" stroke="url(#g)" stroke-width="2"/>
+      <text x="200" y="65" text-anchor="middle" fill="currentColor" font-size="14" font-family="system-ui">Write → Build → Serve → Show → Click!</text>
+    </svg>
+    <div class="takeaway">
+      <h4>You can explain Next.js to anyone now</h4>
+      <ul>
+        <li>Start with folders → end with hydration and cache.</li>
+        <li>When stuck, ask: is this build time, request time, or browser time?</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- BONUS 1 -->
+  <section id="b1">
+    <div class="section-label">Bonus 1</div>
+    <h2>Middleware</h2>
+    <p class="section-desc">Code that runs <em>before</em> a page, for matching URLs only.</p>
+    <div class="kid-callout"><span class="emoji">🚪</span><span><strong>Like a bouncer:</strong> Before anyone enters a room, the bouncer checks a list. Wrong door? Send them elsewhere (redirect). Old sign? Quietly show the new room (rewrite). All good? Let them in (next).</span></div>
+    <pre class="code">export function middleware(req) {
+  if (!req.cookies.has('session') &amp;&amp; req.nextUrl.pathname.startsWith('/dashboard'))
+    return NextResponse.redirect(new URL('/login', req.url))
+  if (req.nextUrl.pathname === '/old-blog')
+    return NextResponse.rewrite(new URL('/blog', req.url))
+  return NextResponse.next()
+}
+export const config = { matcher: ['/((?!api|_next).*)'] }</pre>
+    <div class="bx-row" id="mw-paths"></div>
+    <div class="bx-row"><button type="button" class="module-chip" id="mw-auth">Logged in: no</button></div>
+    <div class="bx-out" id="mw-out">Pick a URL.</div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul><li>Middleware runs <strong>before</strong> routing finishes — keep it fast and small.</li><li>Use <code>config.matcher</code> so it skips assets and API paths.</li><li>Redirect changes the URL; rewrite keeps the URL but serves another page. Newer Next.js versions rename this file convention to <code>proxy</code> — check your version.</li></ul>
+    </div>
+  </section>
+
+  <!-- BONUS 2 -->
+  <section id="b2">
+    <div class="section-label">Bonus 2</div>
+    <h2>Server Actions</h2>
+    <p class="section-desc">Submit a form and run a function on the server — no hand-written API route.</p>
+    <div class="kid-callout"><span class="emoji">📮</span><span><strong>Like a mail slot:</strong> You drop a note in the slot (form). A worker inside reads it, updates the library, then hands back a fresh page.</span></div>
+    <pre class="code">async function addTodo(formData) {
+  'use server'
+  await db.todos.create({ title: formData.get('title') })
+  revalidatePath('/todos')
+}</pre>
+    <button class="btn btn-primary" type="button" id="sa-run">Submit form</button>
+    <div class="bx-steps" id="sa-steps"></div>
+    <div class="bx-out" id="sa-out">Press submit to follow the request.</div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul><li>A Server Action is a <strong>public POST endpoint</strong> — always validate input and check auth inside it.</li><li><code>revalidatePath</code> / <code>revalidateTag</code> tell Next.js which cached data is now stale.</li><li>Forms can work before hydration — progressive enhancement.</li></ul>
+    </div>
+  </section>
+
+  <!-- BONUS 3 -->
+  <section id="b3">
+    <div class="section-label">Bonus 3</div>
+    <h2>Streaming &amp; Suspense</h2>
+    <p class="section-desc">Send the page in pieces so slow parts never block fast parts.</p>
+    <div class="kid-callout"><span class="emoji">🚰</span><span><strong>Like a restaurant:</strong> Bring bread right away; the main dish arrives when it is ready. Each <code>&lt;Suspense&gt;</code> is a covered plate.</span></div>
+    <pre class="code">&lt;Header /&gt;
+&lt;Suspense fallback={&lt;Skeleton /&gt;}&gt;&lt;Reviews /&gt;&lt;/Suspense&gt;
+&lt;Suspense fallback={&lt;Skeleton /&gt;}&gt;&lt;Recommendations /&gt;&lt;/Suspense&gt;</pre>
+    <label class="bx-label"><span>Reviews delay</span><span id="st-v1">1200 ms</span></label>
+    <input type="range" id="st-r1" min="200" max="3000" step="100" value="1200" style="width:100%">
+    <label class="bx-label"><span>Recommendations delay</span><span id="st-v2">2400 ms</span></label>
+    <input type="range" id="st-r2" min="200" max="3000" step="100" value="2400" style="width:100%">
+    <button class="btn btn-primary" type="button" id="st-run" style="margin-top:.75rem">Load page</button>
+    <div class="bx-out">
+      <div class="bx-label"><span>Shell + Header (streaming)</span><span id="st-t0">—</span></div><div class="bx-track"><div class="bx-fill" id="st-b0"></div></div>
+      <div class="bx-label"><span>Reviews</span><span id="st-t1">—</span></div><div class="bx-track"><div class="bx-fill" id="st-b1"></div></div>
+      <div class="bx-label"><span>Recommendations</span><span id="st-t2">—</span></div><div class="bx-track"><div class="bx-fill" id="st-b2"></div></div>
+      <p id="st-note" style="margin:0;color:var(--text-muted)">Without streaming the user would see nothing until the slowest part finishes.</p>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul><li>Streaming improves <strong>perceived speed</strong>: users see the shell immediately.</li><li><code>loading.tsx</code> is automatic Suspense around a whole route segment.</li><li>Put Suspense close to the slow data, not around the whole page.</li></ul>
+    </div>
+  </section>
+
+  <!-- BONUS 4 -->
+  <section id="b4">
+    <div class="section-label">Bonus 4</div>
+    <h2>Rendering Strategies</h2>
+    <p class="section-desc">SSG, SSR, ISR, PPR — pick by who sees the page and how often it changes.</p>
+    <div class="kid-callout"><span class="emoji">🍳</span><span><strong>Like a bakery:</strong> Pre-baked bread (SSG), baked on order (SSR), pre-baked but refreshed every hour (ISR), or fresh toppings on a ready base (PPR).</span></div>
+    <div class="bx-row">
+      <select id="rs-who" class="code" aria-label="Audience"><option value="same">Same page for everyone</option><option value="user">Personalized per user</option><option value="mixed">Mostly same, some personalized</option></select>
+      <select id="rs-freq" class="code" aria-label="Change frequency"><option value="rare">Changes rarely</option><option value="often">Changes often</option></select>
+    </div>
+    <div class="bx-out" id="rs-out"></div>
+    <div class="card-grid" style="margin-top:1rem">
+      <div class="card"><strong>SSG</strong><p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">HTML built at <code>next build</code>. Fastest, CDN friendly.</p></div>
+      <div class="card"><strong>SSR</strong><p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">HTML built per request. Fresh and personal, costs server time.</p></div>
+      <div class="card"><strong>ISR</strong><p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">Static page re-generated after <code>revalidate</code> time or on demand.</p></div>
+      <div class="card"><strong>PPR</strong><p style="font-size:.85rem;color:var(--text-muted);margin:.5rem 0 0">Static shell plus streamed dynamic holes. Availability depends on version.</p></div>
+    </div>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul><li>Using cookies, headers or uncached data makes a route <strong>dynamic</strong> automatically.</li><li>Static is cheaper and faster; dynamic is fresher and personal.</li><li>You choose per route, not per app.</li></ul>
+    </div>
+  </section>
+
+  <!-- BONUS 5 -->
+  <section id="b5">
+    <div class="section-label">Bonus 5</div>
+    <h2>Node vs Edge Runtime</h2>
+    <p class="section-desc">Where your server code runs decides which tools it can use.</p>
+    <div class="kid-callout"><span class="emoji">🌍</span><span><strong>Like two kitchens:</strong> A big kitchen (Node) has every appliance but is far away. A tiny food truck (Edge) is close to you and starts instantly, but carries fewer tools.</span></div>
+    <div class="bx-row" id="rt-needs"></div>
+    <div class="bx-out" id="rt-out"></div>
+    <pre class="code" style="margin-top:1rem">export const runtime = 'edge' // or 'nodejs'</pre>
+    <div class="takeaway">
+      <h4>Remember from this chapter</h4>
+      <ul><li>Edge = fast cold start, low latency, <strong>limited Node APIs</strong>.</li><li>Native modules, <code>fs</code> and many DB drivers need the Node runtime.</li><li>Choose per route with <code>export const runtime</code>; default to Node unless you have a reason.</li></ul>
+    </div>
+  </section>
+
+  <!-- SECTION 16 — Glossary -->
+  <section id="s16">
+    <div class="section-label">Reference</div>
+    <h2>Glossary</h2>
+    <p class="section-desc">Search terms you hear in Next.js docs — each with a simple line and a precise line.</p>
+    <div class="card-grid" style="margin-bottom:2rem">
+      <details class="card"><summary style="cursor:pointer;font-weight:600">Do I need Node to read this page?</summary><p style="font-size:0.88rem;color:var(--text-muted);margin:0.75rem 0 0">No. Double-click the HTML file. Everything runs in your browser.</p></details>
+      <details class="card"><summary style="cursor:pointer;font-weight:600">Is this official Next.js documentation?</summary><p style="font-size:0.88rem;color:var(--text-muted);margin:0.75rem 0 0">No. It is a community education artifact. Always confirm behavior with the docs for your Next.js version.</p></details>
+      <details class="card"><summary style="cursor:pointer;font-weight:600">Why one HTML file?</summary><p style="font-size:0.88rem;color:var(--text-muted);margin:0.75rem 0 0">So you can fork, ship, and teach without npm, CI, or hosting lock-in. Perfect for README demos and workshops.</p></details>
+      <details class="card"><summary style="cursor:pointer;font-weight:600">What license?</summary><p style="font-size:0.88rem;color:var(--text-muted);margin:0.75rem 0 0">MIT — use commercially, modify, redistribute. Keep the license notice in the file header when you redistribute.</p></details>
+    </div>
+    <label for="glossary-filter" class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden">Filter glossary</label>
+    <input type="search" class="glossary-search" id="glossary-filter" placeholder="Search (e.g. RSC, ISR, middleware)…" autocomplete="off" />
+    <div class="glossary-grid" id="glossary-grid"></div>
+  </section>
+
+  </main>
+
+  <div id="scroll-progress" style="position:fixed;top:0;left:0;height:2px;width:0;background:linear-gradient(90deg,var(--accent),var(--success));z-index:10000;transition:width 0.1s"></div>
+
+  <footer>
+    <p><strong>nextjs-under-the-hood.html</strong> · MIT License · Educational · Not affiliated with Vercel or the Next.js trademark holders.</p>
+    <div class="oss-footer">
+      <p><strong>Use it anywhere:</strong> Host on GitHub Pages, drop in a repo, email the file, or open via <code>file://</code>. No install. Fork and edit the single file — that is the entire “build system.”</p>
+      <p><strong>Contributing:</strong> Improve copy, accessibility, or diagrams in this HTML file; keep zero external dependencies.</p>
+    </div>
+    <p style="margin-top:1rem;font-size:0.75rem">Press <kbd style="padding:0.15rem 0.4rem;border:1px solid var(--border);border-radius:4px">?</kbd> for shortcuts · <kbd>T</kbd> theme · Sections <kbd>1</kbd>–<kbd>9</kbd>, <kbd>0</kbd> = §10, <kbd>G</kbd> glossary</p>
+    <p style="margin-top:0.5rem;font-size:0.7rem;color:var(--text-muted)">Version 1.0.0 · Next.js concepts evolve — verify against official docs for your version.</p>
+  </footer>
+
+  <dialog id="help-dialog" style="background:var(--bg-panel);color:var(--text);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;max-width:420px">
+    <h3 style="margin-top:0">Keyboard shortcuts</h3>
+    <ul style="color:var(--text-muted);font-size:0.9rem;line-height:1.8">
+      <li><kbd>1</kbd>–<kbd>9</kbd> Jump to sections 1–9</li>
+      <li><kbd>0</kbd> Jump to section 10</li>
+      <li><kbd>G</kbd> Jump to glossary</li>
+      <li><kbd>T</kbd> Toggle light / dark theme</li>
+      <li>Top-right ☀️/🌙 Same as <kbd>T</kbd></li>
+      <li><kbd>Esc</kbd> Close this dialog</li>
+    </ul>
+    <button class="btn btn-primary" type="button" id="help-close">Close</button>
+  </dialog>
+
+  <script>
+(function () {
+  'use strict';
+
+  const APP_VERSION = '1.0.0';
+
+  const GLOSSARY = [
+    { term: 'App Router', simple: 'The folder-based routing system in the app/ directory.', precise: 'Next.js 13+ router using layouts, nested routes, and RSC by default.' },
+    { term: 'RSC', simple: 'Server Components — UI built on the server.', precise: 'React Server Components; async components rendered on server, serialized via Flight.' },
+    { term: 'Flight', simple: 'Recipe messages from server to browser.', precise: 'React Server Components wire format (react-server-dom-webpack / turbopack bindings).' },
+    { term: 'Hydration', simple: 'Plugging in click handlers on existing HTML.', precise: 'react-dom hydrateRoot reconciling client components with SSR markup.' },
+    { term: 'ISR', simple: 'Show a cached page, refresh it later.', precise: 'Incremental Static Regeneration via revalidate and background regeneration.' },
+    { term: 'SSR', simple: 'HTML built fresh on each request (or streamed).', precise: 'Server-Side Rendering — dynamic HTML per request vs static export.' },
+    { term: 'SSG', simple: 'HTML baked at build time.', precise: 'Static Site Generation — pages pre-rendered during next build.' },
+    { term: 'Middleware', simple: 'A bouncer before your page runs.', precise: 'Edge or Node middleware matching paths, rewriting, auth checks.' },
+    { term: 'Code splitting', simple: 'Many small JS files instead of one huge file.', precise: 'Dynamic imports and bundler chunks loaded on demand per route.' },
+    { term: 'Turbopack', simple: 'Fast dev bundler (incremental rebuilds).', precise: 'Rust bundler used by next dev --turbo; incremental graph invalidation.' },
+    { term: 'Webpack', simple: 'Classic JS bundler many apps still use in prod builds.', precise: 'Module bundler; Next production builds historically webpack-based.' },
+    { term: 'SWC', simple: 'Super-fast compiler (Rust).', precise: 'Compiles TS/JSX, applies Next transforms, minifies for production.' },
+    { term: 'Client Component', simple: 'Runs in the browser with interactivity.', precise: 'Module marked "use client"; included in client JS bundles.' },
+    { term: 'Server Action', simple: 'A function that runs on the server when a form submits.', precise: 'Async functions with server directive; POST RPC-style mutations.' },
+    { term: 'Route Cache', simple: 'Saved full page answers.', precise: 'Caches RSC payload for static segments; Full Route Cache in App Router.' },
+    { term: 'Fetch Cache', simple: 'Remember API answers during rendering.', precise: 'Dedupes fetch in React tree; configurable cache/no-store/revalidate.' },
+    { term: 'Dynamic segment', simple: 'URL part that changes ([slug]).', precise: 'Bracket folders creating parametric routes and generateStaticParams.' },
+    { term: 'Layout', simple: 'Shared wrapper around pages in a folder.', precise: 'layout.tsx preserving state across navigations within segment.' },
+    { term: 'Streaming', simple: 'Send HTML in pieces as ready.', precise: 'React Suspense boundaries streaming RSC/HTML before all data resolves.' },
+    { term: 'Edge Runtime', simple: 'Lightweight server close to users.', precise: 'V8 isolates at CDN edge; subset of Node APIs; fast cold starts.' },
+    { term: 'Manifest', simple: 'A map file listing routes and assets.', precise: 'JSON in .next (routes-manifest, build-manifest) for runtime lookup.' },
+    { term: 'Tree shaking', simple: 'Throw away unused code.', precise: 'Static analysis removing dead ESM exports from bundles.' },
+    { term: 'Middleware matcher', simple: 'Which URLs run the bouncer.', precise: 'config.matcher array filtering middleware execution paths.' },
+    { term: 'Partial Prerendering', simple: 'Mix static shell + dynamic holes.', precise: 'PPR: static HTML frame with streamed dynamic content (feature evolution).' },
+    { term: 'Suspense', simple: 'A covered plate shown as a placeholder until ready.', precise: 'React boundary with a fallback; enables streaming of async parts.' },
+    { term: 'Route Handler', simple: 'A URL that returns data instead of a page.', precise: 'route.ts exporting GET/POST etc. using Web Request/Response.' },
+    { term: 'revalidatePath', simple: 'Tell Next.js a page is out of date.', precise: 'Invalidates cached data for a path; commonly called in Server Actions.' },
+    { term: 'Rewrite vs Redirect', simple: 'Rewrite hides the move; redirect shows it.', precise: 'Rewrite keeps the browser URL; redirect sends 307/308 and changes it.' }
+  ];
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function initTheme() {
+    const root = document.documentElement;
+    const btn = document.getElementById('theme-toggle');
+    const saved = localStorage.getItem('nextjs-explainer-theme');
+    if (saved === 'light' || saved === 'dark') {
+      document.body.setAttribute('data-theme', saved);
+    } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+      document.body.setAttribute('data-theme', 'light');
+    }
+    function syncMetaTheme() {
+      let meta = document.querySelector('meta[name="theme-color"][data-dynamic]');
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.name = 'theme-color';
+        meta.setAttribute('data-dynamic', '1');
+        document.head.appendChild(meta);
+      }
+      meta.content = document.body.getAttribute('data-theme') === 'light' ? '#f8f9fb' : '#0a0a0a';
+    }
+    function syncIcon() {
+      const dark = document.body.getAttribute('data-theme') !== 'light';
+      btn.textContent = dark ? '☀️' : '🌙';
+      btn.title = dark ? 'Switch to light theme' : 'Switch to dark theme';
+    }
+    btn.addEventListener('click', () => {
+      const next = document.body.getAttribute('data-theme') === 'light' ? 'dark' : 'light';
+      document.body.setAttribute('data-theme', next);
+      localStorage.setItem('nextjs-explainer-theme', next);
+      syncIcon();
+      syncMetaTheme();
+      renderDepGraph();
+      renderLifecycleChart();
+    });
+    syncIcon();
+    syncMetaTheme();
+  }
+
+  function initScrollProgress() {
+    const bar = document.getElementById('scroll-progress');
+    window.addEventListener('scroll', () => {
+      const doc = document.documentElement;
+      const pct = (doc.scrollTop / (doc.scrollHeight - doc.clientHeight)) * 100;
+      bar.style.width = pct + '%';
+    }, { passive: true });
+  }
+
+  function initKeyboardNav() {
+    const dialog = document.getElementById('help-dialog');
+    document.getElementById('help-close').addEventListener('click', () => dialog.close());
+    document.addEventListener('keydown', (e) => {
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        dialog.showModal();
+      }
+      if (e.key === 'Escape') dialog.close();
+      if ((e.key === 't' || e.key === 'T') && !e.ctrlKey && !e.metaKey && document.activeElement?.tagName !== 'INPUT' && document.activeElement?.tagName !== 'TEXTAREA') {
+        document.getElementById('theme-toggle')?.click();
+      }
+      if ((e.key === 'g' || e.key === 'G') && !e.ctrlKey && !e.metaKey) {
+        document.getElementById('s16')?.scrollIntoView({ behavior: 'smooth' });
+        document.getElementById('glossary-filter')?.focus();
+      }
+      const map = { '1': 's1', '2': 's2', '3': 's3', '4': 's4', '5': 's5', '6': 's6', '7': 's7', '8': 's8', '9': 's9', '0': 's10' };
+      if (map[e.key] && !e.ctrlKey && !e.metaKey) {
+        document.getElementById(map[e.key])?.scrollIntoView({ behavior: 'smooth' });
+      }
+    });
+  }
+
+  function initStickyToc() {
+    const sticky = document.getElementById('sticky-toc');
+    const links = [...document.querySelectorAll('.nav-toc a')];
+    links.forEach(a => {
+      const clone = a.cloneNode(true);
+      sticky.appendChild(clone);
+    });
+    const stickyLinks = [...sticky.querySelectorAll('a')];
+    const sections = stickyLinks.map(a => document.querySelector(a.getAttribute('href'))).filter(Boolean);
+    const hero = document.querySelector('.hero');
+    window.addEventListener('scroll', () => {
+      sticky.classList.toggle('visible', window.scrollY > (hero?.offsetHeight || 400) * 0.6);
+    }, { passive: true });
+    const io = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (!entry.isIntersecting) return;
+        const id = entry.target.id;
+        links.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + id));
+        stickyLinks.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + id));
+      });
+    }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
+    sections.forEach(s => io.observe(s));
+  }
+
+  function renderGlossary(filter) {
+    const grid = document.getElementById('glossary-grid');
+    if (!grid) return;
+    const q = (filter || '').trim().toLowerCase();
+    grid.innerHTML = '';
+    GLOSSARY.filter(g => !q || g.term.toLowerCase().includes(q) || g.simple.toLowerCase().includes(q) || g.precise.toLowerCase().includes(q))
+      .forEach(g => {
+        const el = document.createElement('dl');
+        el.className = 'glossary-item';
+        el.innerHTML = '<dt>' + escapeHtml(g.term) + '</dt><dd class="simple">' + escapeHtml(g.simple) + '</dd><dd>' + escapeHtml(g.precise) + '</dd>';
+        grid.appendChild(el);
+      });
+    if (!grid.children.length) {
+      grid.innerHTML = '<p style="color:var(--text-muted)">No terms match. Try RSC, cache, or router.</p>';
+    }
+  }
+
+  function initGlossary() {
+    const input = document.getElementById('glossary-filter');
+    renderGlossary('');
+    input?.addEventListener('input', () => renderGlossary(input.value));
+  }
+
+  /** Illustration SVG factory for section headers */
+  function createSectionIcon(type) {
+    const icons = {
+      graph: '<svg width="48" height="48" viewBox="0 0 48 48"><circle cx="24" cy="12" r="6" fill="#0070f3"/><circle cx="12" cy="36" r="5" fill="#404040"/><circle cx="36" cy="36" r="5" fill="#404040"/><line x1="24" y1="18" x2="12" y2="31" stroke="#262626"/><line x1="24" y1="18" x2="36" y2="31" stroke="#262626"/></svg>',
+      swc: '<svg width="48" height="48" viewBox="0 0 48 48"><rect x="8" y="14" width="32" height="20" rx="4" fill="none" stroke="#0070f3"/><path d="M16 24h16M24 18v12" stroke="#50e3c2"/></svg>',
+      bundle: '<svg width="48" height="48" viewBox="0 0 48 48"><rect x="6" y="10" width="14" height="10" rx="2" fill="#161616" stroke="#404040"/><rect x="28" y="10" width="14" height="10" rx="2" fill="#161616" stroke="#404040"/><rect x="17" y="28" width="14" height="10" rx="2" fill="#0070f3" opacity="0.5"/></svg>'
+    };
+    return icons[type] || '';
+  }
+
+  const PIPELINE_DATA = [
+    { id: 'code', title: 'Developer Code', sub: 'You write the story', simple: 'Your pages and components in files you edit.', grown: 'React/TSX in app/ and components/.', analogy: 'Like writing a storybook before it gets printed.', packages: ['react', 'typescript', 'your-app'] },
+    { id: 'scan', title: 'Route Scanner', sub: 'Folders → URLs', simple: 'Looks at folder names and picks website paths.', grown: 'Maps app/ tree to URL patterns automatically.', analogy: 'Like putting name tags on doors in a hallway.', packages: ['next route scanner', 'app router'] },
+    { id: 'graph', title: 'Dependency Graph', sub: 'Who imports who', simple: 'Lists which file needs which other files.', grown: 'Builds import graph from each page entry.', analogy: 'Like a LEGO diagram showing which blocks connect.', packages: ['module graph', 'turbopack/webpack'] },
+    { id: 'swc', title: 'SWC Compiler', sub: 'Fast translator', simple: 'Turns JSX/TypeScript into plain JavaScript.', grown: 'Parse, transform, optimize, minify in Rust.', analogy: 'Like translating your book so everyone can read it.', packages: ['@swc/core', 'next-swc'] },
+    { id: 'rsc', title: 'Server Components', sub: 'Work in the cloud', simple: 'Builds parts of the page on the server.', grown: 'Async RSC render + data fetching server-side.', analogy: 'Like a chef cooking in the kitchen, not at your table.', packages: ['react-server-dom', 'react'] },
+    { id: 'bundle', title: 'Bundler', sub: 'Pack JavaScript', simple: 'Groups files into download-sized chunks.', grown: 'Code-splitting for client component boundaries.', analogy: 'Like packing clothes into separate suitcases.', packages: ['turbopack', 'webpack'] },
+    { id: 'output', title: 'Build Output', sub: 'The .next folder', simple: 'Saves everything ready for production.', grown: 'Writes server bundles, static assets, manifests.', analogy: 'Like a packed lunchbox for launch day.', packages: ['.next/server', '.next/static', 'manifests'] },
+    { id: 'runtime', title: 'Server Runtime', sub: 'The worker', simple: 'A computer that runs your app when people visit.', grown: 'Node/Edge executes RSC, routes, and APIs.', analogy: 'Like a restaurant kitchen when orders arrive.', packages: ['next/server', 'node or edge'] },
+    { id: 'browser', title: 'Browser', sub: 'Your screen', simple: 'Shows HTML and loads interactive JavaScript.', grown: 'First paint from HTML; then client chunks.', analogy: 'Like opening a magazine, then getting the remote control.', packages: ['HTML', 'CSS', 'client JS'] },
+    { id: 'hydrate', title: 'Hydration', sub: 'Clicks wake up', simple: 'React connects buttons to your clicks.', grown: 'react-dom attaches listeners to SSR DOM.', analogy: 'Like plugging in a toy so it actually moves.', packages: ['react-dom/client', 'hydrateRoot'] }
+  ];
+
+  function renderPipeline() {
+    const root = document.getElementById('pipeline');
+    const panel = document.getElementById('pipeline-panel');
+    PIPELINE_DATA.forEach((step, i) => {
+      if (i > 0) {
+        const arrow = document.createElement('div');
+        arrow.className = 'pipe-arrow';
+        root.appendChild(arrow);
+      }
+      const node = document.createElement('button');
+      node.type = 'button';
+      node.className = 'pipe-node';
+      node.style.setProperty('--i', i);
+      node.innerHTML = step.title + '<span class="pipe-sub">' + step.sub + '</span>';
+      node.addEventListener('click', () => {
+        root.querySelectorAll('.pipe-node').forEach(n => n.classList.remove('active'));
+        node.classList.add('active');
+        panel.innerHTML =
+          '<h3>' + step.title + '</h3>' +
+          '<p class="simple-lead">' + step.simple + '</p>' +
+          '<div class="learn-two">' +
+          '<div class="learn-box"><label>Simple picture</label>' + step.analogy + '</div>' +
+          '<div class="learn-box"><label>Technical detail</label>' + step.grown + '</div></div>' +
+          '<p style="margin-top:1rem;font-size:0.85rem;color:var(--text-muted)"><strong>Tools involved:</strong></p>' +
+          '<div class="tag-list">' + step.packages.map(p => '<span class="tag">' + p + '</span>').join('') + '</div>';
+      });
+      root.appendChild(node);
+    });
+    root.querySelector('.pipe-node')?.click();
+  }
+
+  const ROUTES = {
+    'app/page.tsx': '/',
+    'app/about/page.tsx': '/about',
+    'app/blog/[slug]/page.tsx': '/blog/[slug]',
+    'app/dashboard/page.tsx': '/dashboard'
+  };
+
+  function renderRouteTree() {
+    const tree = document.getElementById('route-tree');
+    const manifest = document.getElementById('route-manifest');
+    const explain = document.getElementById('route-explain');
+    const files = ['app/', 'app/page.tsx', 'app/about/page.tsx', 'app/blog/[slug]/page.tsx', 'app/dashboard/page.tsx'];
+    manifest.textContent = JSON.stringify(Object.fromEntries(Object.entries(ROUTES).map(([k, v]) => [v, k])), null, 2);
+    files.forEach(f => {
+      const el = document.createElement('div');
+      el.className = 'tree-item' + (f.includes('page') ? '' : '');
+      el.style.paddingLeft = (f.split('/').length - 1) * 12 + 'px';
+      el.textContent = f;
+      if (ROUTES[f]) {
+        el.addEventListener('click', () => {
+          tree.querySelectorAll('.tree-item').forEach(t => t.classList.remove('selected'));
+          el.classList.add('selected');
+          explain.innerHTML =
+            '<h3>URL: ' + ROUTES[f] + '</h3>' +
+            '<p class="simple-lead">When someone opens <code>' + ROUTES[f] + '</code>, Next.js opens file <code>' + f + '</code>.</p>' +
+            '<div class="learn-two">' +
+            '<div class="learn-box"><label>Simple picture</label>Folder path is like an address — each folder is another street name.</div>' +
+            '<div class="learn-box"><label>Technical detail</label><code>page.tsx</code> marks a URL. <code>[slug]</code> is a wildcard for blog posts.</div></div>';
+        });
+      }
+      tree.appendChild(el);
+    });
+    tree.querySelector('.tree-item:nth-child(2)')?.click();
+  }
+
+  const DEP_GRAPH = {
+    'page.tsx': ['Header', 'Hero', 'Dashboard'],
+    Header: [],
+    Hero: [],
+    Dashboard: ['Chart', 'Table', 'Analytics'],
+    Chart: [],
+    Table: [],
+    Analytics: []
+  };
+
+  function renderDepGraph() {
+    const svg = document.getElementById('dep-graph');
+    const panel = document.getElementById('dep-panel');
+    const metrics = document.getElementById('dep-metrics');
+    const w = svg.clientWidth || 800;
+    const h = 400;
+    const nodeFill = cssVar('--graph-node') || '#161616';
+    const nodeStroke = cssVar('--graph-node-stroke') || '#262626';
+    const textFill = cssVar('--text') || '#ededed';
+    const edgeStroke = cssVar('--graph-edge') || '#404040';
+    svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    const positions = {
+      'page.tsx': { x: w / 2, y: 55 },
+      Header: { x: w * 0.2, y: 155 },
+      Hero: { x: w * 0.5, y: 155 },
+      Dashboard: { x: w * 0.8, y: 155 },
+      Chart: { x: w * 0.65, y: 280 },
+      Table: { x: w * 0.8, y: 280 },
+      Analytics: { x: w * 0.72, y: 320 }
+    };
+    const nodes = Object.keys(DEP_GRAPH);
+    let edges = '';
+    Object.entries(DEP_GRAPH).forEach(([from, tos]) => {
+      tos.forEach(to => {
+        const a = positions[from], b = positions[to];
+        if (!a || !b) return;
+        edges += '<line class="graph-edge" data-from="' + from + '" data-to="' + to + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" stroke="' + edgeStroke + '" stroke-width="1.5" marker-end="url(#arrowDep)"/>';
+      });
+    });
+    let circles = '';
+    nodes.forEach(n => {
+      const p = positions[n];
+      if (!p) return;
+      const label = n.replace('.tsx', '');
+      circles += '<g class="graph-node" data-node="' + n + '" style="cursor:pointer"><circle cx="' + p.x + '" cy="' + p.y + '" r="32" fill="' + nodeFill + '" stroke="' + nodeStroke + '" stroke-width="2"/><text x="' + p.x + '" y="' + (p.y + 4) + '" text-anchor="middle" fill="' + textFill + '" font-size="11" font-weight="500" font-family="system-ui">' + label + '</text></g>';
+    });
+    svg.innerHTML =
+      '<defs><marker id="arrowDep" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6 Z" fill="' + edgeStroke + '"/></marker></defs>' +
+      edges + circles;
+    function subtree(name, acc) {
+      if (acc.has(name)) return acc;
+      acc.add(name);
+      (DEP_GRAPH[name] || []).forEach(c => subtree(c, acc));
+      return acc;
+    }
+    svg.querySelectorAll('.graph-node').forEach(g => {
+      g.addEventListener('click', () => {
+        const name = g.getAttribute('data-node');
+        const sub = subtree(name, new Set());
+        const accent = cssVar('--accent') || '#0070f3';
+        const soft = cssVar('--accent-soft') || 'rgba(0,112,243,0.2)';
+        svg.querySelectorAll('.graph-edge').forEach(line => {
+          const from = line.getAttribute('data-from');
+          const to = line.getAttribute('data-to');
+          const on = sub.has(from) && sub.has(to);
+          line.classList.toggle('highlight', on);
+        });
+        svg.querySelectorAll('.graph-node circle').forEach(c => {
+          const id = c.parentNode.getAttribute('data-node');
+          c.setAttribute('stroke', sub.has(id) ? accent : nodeStroke);
+          c.setAttribute('fill', sub.has(id) ? soft : nodeFill);
+        });
+        const direct = DEP_GRAPH[name] || [];
+        panel.innerHTML =
+          '<h3>' + name.replace('.tsx', '') + '</h3>' +
+          '<p class="simple-lead">' + (direct.length ? 'This piece needs: ' + direct.join(', ') + '.' : 'This piece needs no other pieces — a leaf block.') + '</p>' +
+          '<div class="learn-two">' +
+          '<div class="learn-box"><label>Simple picture</label>' + sub.size + ' blocks in this stack — like counting LEGO pieces in one build step.</div>' +
+          '<div class="learn-box"><label>Bundle hint</label>More shared pieces = smarter packing. Too many deps = heavier download.</div></div>';
+        metrics.innerHTML = '<div class="metric"><div class="metric-value">' + sub.size + '</div><div class="metric-label">Subtree modules</div></div><div class="metric"><div class="metric-value">' + direct.length + '</div><div class="metric-label">Direct deps</div></div><div class="metric"><div class="metric-value">' + nodes.length + '</div><div class="metric-label">Total modules</div></div>';
+      });
+    });
+    metrics.innerHTML = '<div class="metric"><div class="metric-value">' + nodes.length + '</div><div class="metric-label">LEGO blocks total</div></div>';
+    const start = svg.querySelector('.graph-node[data-node="page.tsx"]');
+    if (start) start.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  }
+
+  const SWC_JSX = `export default function Welcome() {
+  return (
+    <section className="hero">
+      <h1>Hello Next.js</h1>
+    </section>
+  );
+}`;
+
+  const SWC_COMPILED = `export default function Welcome() {
+  return /*#__PURE__*/ React.createElement("section", {
+    className: "hero"
+  }, /*#__PURE__*/ React.createElement("h1", null, "Hello Next.js"));
+}`;
+
+  const SWC_MIN = `export default function Welcome(){return React.createElement("section",{className:"hero"},React.createElement("h1",null,"Hello Next.js"))}`;
+
+  const SWC_AST = `Program
+└─ ExportDefaultDeclaration
+   └─ FunctionDeclaration "Welcome"
+      └─ ReturnStatement
+         └─ JSXElement "section"
+            ├─ JSXAttribute className
+            └─ JSXElement "h1"`;
+
+  function renderSwc() {
+    const tabs = ['Original', 'AST', 'Compiled', 'Minified'];
+    const contents = [SWC_JSX, SWC_AST, SWC_COMPILED, SWC_MIN];
+    const tabEl = document.getElementById('swc-tabs');
+    const panels = document.getElementById('swc-panels');
+    tabs.forEach((t, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'tab' + (i === 0 ? ' active' : '');
+      btn.textContent = t;
+      btn.addEventListener('click', () => {
+        tabEl.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+        panels.querySelectorAll('.tab-panel').forEach((p, j) => p.classList.toggle('active', j === i));
+      });
+      tabEl.appendChild(btn);
+      const panel = document.createElement('div');
+      panel.className = 'tab-panel' + (i === 0 ? ' active' : '');
+      panel.innerHTML = '<pre class="code">' + escapeHtml(contents[i]) + '</pre>';
+      panels.appendChild(panel);
+    });
+    const stages = ['Parse', 'Transform', 'Optimize', 'Minify'];
+    const descs = [
+      'Parse: Read your file like sentences and build a tree (AST). Kid version: outline the story first.',
+      'Transform: Change JSX into JavaScript calls. Kid version: rewrite tags into instructions.',
+      'Optimize: Remove unused code and simplify. Kid version: erase extra crayon marks.',
+      'Minify: Squish file size for the internet. Kid version: write tiny shorthand for shipping.'
+    ];
+    const stageRoot = document.getElementById('swc-stages');
+    const stageDesc = document.getElementById('swc-stage-desc');
+    stages.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn';
+      b.textContent = s;
+      b.addEventListener('click', () => {
+        stageDesc.textContent = descs[i];
+        const prog = document.getElementById('swc-progress');
+        if (prog) prog.style.width = ((i + 1) / stages.length * 100) + '%';
+      });
+      stageRoot.appendChild(b);
+    });
+    stageDesc.textContent = 'Click a stage to learn what SWC does.';
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  document.getElementById('rsc-animate').addEventListener('click', () => {
+    const pkt = document.querySelector('.packet');
+    pkt.style.animation = 'none';
+    void pkt.offsetWidth;
+    pkt.style.animation = 'fly 2s ease-in-out';
+  });
+
+  const CLIENT_COMPONENTS = [
+    { name: 'Hero', client: false, kb: 0 },
+    { name: 'Dashboard', client: false, kb: 12 },
+    { name: 'SearchBox', client: true, kb: 18 }
+  ];
+
+  function renderClientTree() {
+    const tree = document.getElementById('client-tree');
+    const toggles = document.getElementById('client-toggles');
+    tree.innerHTML = 'Page<br>├ Hero<br>├ Dashboard<br>└ <span id="search-wrap">SearchBox</span>';
+    function updateBundle() {
+      let kb = 0;
+      CLIENT_COMPONENTS.forEach(c => { if (c.client) kb += c.kb; });
+      document.getElementById('bundle-kb').textContent = kb + ' KB';
+      document.getElementById('bundle-fill').style.width = Math.min(100, kb) + '%';
+      const wrap = document.getElementById('search-wrap');
+      if (wrap) {
+        const sb = CLIENT_COMPONENTS.find(c => c.name === 'SearchBox');
+        wrap.parentElement.className = sb.client ? 'client-boundary' : '';
+      }
+    }
+    CLIENT_COMPONENTS.forEach(c => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'module-chip' + (c.client ? ' on' : '');
+      chip.textContent = c.name + (c.client ? ' (client)' : '');
+      chip.addEventListener('click', () => {
+        c.client = !c.client;
+        chip.classList.toggle('on', c.client);
+        chip.textContent = c.name + (c.client ? ' (client)' : '');
+        updateBundle();
+      });
+      toggles.appendChild(chip);
+    });
+    updateBundle();
+  }
+
+  document.getElementById('flight-send').addEventListener('click', () => {
+    const stream = document.getElementById('flight-stream');
+    const payload = document.getElementById('flight-payload');
+    if (payload) {
+      payload.textContent = 'M1: "Build Hero here"\nM2: "Build Sidebar here"\nM3: "Dashboard needs M4"\n→ Browser follows steps (not your .tsx files)';
+    }
+    stream.innerHTML = '';
+    for (let i = 0; i < 5; i++) {
+      const p = document.createElement('div');
+      p.className = 'flight-packet';
+      p.textContent = 'M' + (i + 1);
+      p.style.animationDelay = (i * 0.4) + 's';
+      stream.appendChild(p);
+    }
+  });
+
+  const BUNDLE_MODULES = [
+    { id: 'header', name: 'Header', chunk: 'shared' },
+    { id: 'footer', name: 'Footer', chunk: 'shared' },
+    { id: 'chart', name: 'Chart', chunk: 'dashboard' },
+    { id: 'profile', name: 'Profile', chunk: 'profile' },
+    { id: 'search', name: 'Search', chunk: 'dashboard' }
+  ];
+  const activeModules = new Set(BUNDLE_MODULES.map(m => m.id));
+
+  function renderBundler() {
+    const modEl = document.getElementById('bundle-modules');
+    const out = document.getElementById('chunk-output');
+    const stats = document.getElementById('bundle-stats');
+    const bars = document.getElementById('chunk-bars');
+    function refresh() {
+      const chunks = {};
+      BUNDLE_MODULES.forEach(m => {
+        if (!activeModules.has(m.id)) return;
+        chunks[m.chunk] = chunks[m.chunk] || [];
+        chunks[m.chunk].push(m.name);
+      });
+      out.innerHTML = '';
+      const sizes = {};
+      Object.entries(chunks).forEach(([name, mods]) => {
+        sizes[name] = mods.length * 4.2;
+        const div = document.createElement('div');
+        div.className = 'chunk';
+        div.innerHTML = '<strong>' + name + '.js</strong><br><span style="font-size:0.75rem;color:var(--text-muted)">' + mods.join(', ') + '</span><br><span style="font-size:0.7rem;color:var(--accent)">' + sizes[name].toFixed(1) + ' KB</span>';
+        out.appendChild(div);
+      });
+      const maxSize = Math.max(1, ...Object.values(sizes));
+      if (bars) {
+        bars.innerHTML = '<p style="margin:0 0 0.5rem;font-size:0.8rem;color:var(--text-muted)">Chunk size chart (estimated)</p>';
+        Object.entries(sizes).forEach(([name, kb]) => {
+          const row = document.createElement('div');
+          row.className = 'bar-row';
+          row.innerHTML = '<span>' + name + '</span><div class="bar-track"><div class="bar-fill" style="width:' + (kb / maxSize * 100) + '%"></div></div><span>' + kb.toFixed(1) + '</span>';
+          bars.appendChild(row);
+        });
+      }
+      const modCount = activeModules.size;
+      const chunkCount = Object.keys(chunks).length;
+      const totalKb = modCount * 4.2;
+      stats.innerHTML = '<div class="metric"><div class="metric-value">' + modCount + '</div><div class="metric-label">Pieces packed</div></div><div class="metric"><div class="metric-value">' + chunkCount + '</div><div class="metric-label">Suitcases (chunks)</div></div><div class="metric"><div class="metric-value">' + totalKb.toFixed(1) + ' KB</div><div class="metric-label">Total weight</div></div>';
+    }
+    BUNDLE_MODULES.forEach(m => {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'module-chip on';
+      chip.textContent = m.name;
+      chip.addEventListener('click', () => {
+        if (activeModules.has(m.id)) activeModules.delete(m.id); else activeModules.add(m.id);
+        chip.classList.toggle('on', activeModules.has(m.id));
+        refresh();
+      });
+      modEl.appendChild(chip);
+    });
+    refresh();
+  }
+
+  document.getElementById('trigger-rebuild').addEventListener('click', () => {
+    const wBar = document.getElementById('bar-webpack');
+    const tBar = document.getElementById('bar-turbo');
+    const wTime = document.getElementById('time-webpack');
+    const tTime = document.getElementById('time-turbo');
+    wBar.style.width = '0%';
+    tBar.style.width = '0%';
+    let w = 0, t = 0;
+    const wi = setInterval(() => {
+      w += 4;
+      wBar.style.width = w + '%';
+      if (w >= 100) {
+        clearInterval(wi);
+        wTime.textContent = '842 ms (all modules)';
+      }
+    }, 30);
+    const ti = setInterval(() => {
+      t += 12;
+      tBar.style.width = t + '%';
+      if (t >= 100) {
+        clearInterval(ti);
+        tTime.textContent = '48 ms (Header + deps)';
+      }
+    }, 8);
+  });
+
+  const NEXT_TREE = {
+    '.next/': {
+      'server/': 'Server bundles: RSC, app routes, SSR entrypoints. Kid: kitchen meals ready to serve.',
+      'static/': 'Hashed client JS/CSS/fonts. Kid: labeled snack packs for the browser.',
+      'cache/': 'Fetch and ISR cache from dev/build. Kid: sticky notes from last time.',
+      'chunks/': 'Split JS chunks referenced by pages. Kid: numbered luggage tags.',
+      'server/app/': 'Compiled route modules per segment. Kid: one recipe card per URL.',
+      'BUILD_ID': 'Unique id for this build. Kid: batch number on the lunchbox.',
+      'routes-manifest.json': '{"pages":{"/":{"file":"..."}},"dynamicRoutes":[{"page":"/blog/[slug]"}]}',
+      'build-manifest.json': 'Maps pages to JS/CSS chunk files loaded in browser.'
+    }
+  };
+
+  function renderNextTree() {
+    const tree = document.getElementById('next-tree');
+    const preview = document.getElementById('next-preview');
+    Object.entries(NEXT_TREE['.next/']).forEach(([name, val]) => {
+      const f = document.createElement('div');
+      f.className = 'folder';
+      f.textContent = name;
+      f.addEventListener('click', () => {
+        tree.querySelectorAll('.folder').forEach(x => x.classList.remove('open'));
+        f.classList.add('open');
+        const kid = typeof val === 'string' && !val.startsWith('{') ? val : '';
+        preview.textContent = typeof val === 'string' && val.startsWith('{')
+          ? val
+          : name + '\n\n' + (kid || 'This folder holds part of the built app.') + '\n\n(Tap another folder to explore.)';
+      });
+      tree.appendChild(f);
+    });
+  }
+
+  const LIFE_NODES = [
+    { id: 'browser', title: 'Browser', simple: 'You tap a link — browser asks for a page.', detail: 'HTTP request with cookies and headers.' },
+    { id: 'cdn', title: 'CDN', simple: 'A nearby helper might already have a copy.', detail: 'Edge cache for static assets and some HTML.' },
+    { id: 'server', title: 'Next Server', simple: 'The app brain picks which page to make.', detail: 'Route match, middleware, RSC handler.' },
+    { id: 'rsc', title: 'Server Component', simple: 'Builds the page and gathers data.', detail: 'Async render, fetch(), DB access.' },
+    { id: 'db', title: 'Database', simple: 'The library of facts.', detail: 'Queries only on server — never in kid’s browser.' },
+    { id: 'html', title: 'HTML', simple: 'Paint-ready page sent back.', detail: 'Streamed markup for fast first paint.' },
+    { id: 'browser2', title: 'Browser', simple: 'Shows page + downloads interactive JS.', detail: 'Parses HTML, loads client chunks.' },
+    { id: 'hydrate', title: 'Hydration', simple: 'React wires up clicks.', detail: 'hydrateRoot attaches event listeners.' }
+  ];
+
+  function renderLifecycleChart() {
+    const svg = document.getElementById('lifecycle-chart');
+    if (!svg) return;
+    const stroke = cssVar('--border') || '#262626';
+    const accent = cssVar('--accent') || '#0070f3';
+    const muted = cssVar('--text-muted') || '#a1a1a1';
+    const n = LIFE_NODES.length;
+    const step = 880 / (n + 1);
+    let content = '';
+    LIFE_NODES.forEach((node, i) => {
+      const x = step * (i + 1);
+      content += '<circle cx="' + x + '" cy="60" r="22" fill="' + cssVar('--bg-panel') + '" stroke="' + stroke + '" stroke-width="2" class="life-dot" data-i="' + i + '"/>';
+      content += '<text x="' + x + '" y="50" text-anchor="middle" fill="' + muted + '" font-size="8" font-family="system-ui">' + escapeHtml(node.title).substring(0, 10) + '</text>';
+      content += '<text x="' + x + '" y="68" text-anchor="middle" fill="' + accent + '" font-size="9" font-weight="600" font-family="system-ui">' + (i + 1) + '</text>';
+      if (i < n - 1) {
+        content += '<line x1="' + (x + 24) + '" y1="60" x2="' + (step * (i + 2) - 24) + '" y2="60" stroke="' + stroke + '" stroke-dasharray="4 4"/>';
+      }
+    });
+    content += '<circle cx="40" cy="60" r="4" fill="' + accent + '"><animate attributeName="cx" values="40;' + (step * n) + '" dur="4s" repeatCount="indefinite"/></circle>';
+    svg.innerHTML = content;
+  }
+
+  function renderLifecycle() {
+    const root = document.getElementById('lifecycle');
+    const panel = document.getElementById('lifecycle-panel');
+    LIFE_NODES.forEach((n, i) => {
+      if (i > 0) {
+        const arr = document.createElement('span');
+        arr.className = 'life-arrow';
+        arr.textContent = '↓';
+        root.appendChild(arr);
+      }
+      const el = document.createElement('button');
+      el.type = 'button';
+      el.className = 'life-node';
+      el.textContent = n.title;
+      el.addEventListener('click', () => {
+        root.querySelectorAll('.life-node').forEach(x => x.classList.remove('active'));
+        el.classList.add('active');
+        panel.innerHTML = '<h3>' + n.title + '</h3><p class="simple-lead">' + n.simple + '</p><div class="learn-box"><label>Technical detail</label>' + n.detail + '</div>';
+      });
+      root.appendChild(el);
+    });
+  }
+
+  document.getElementById('lifecycle-play').addEventListener('click', () => {
+    const nodes = document.querySelectorAll('#lifecycle .life-node');
+    nodes.forEach((n, i) => {
+      setTimeout(() => {
+        nodes.forEach(x => x.classList.remove('active'));
+        n.classList.add('active');
+        n.click();
+      }, i * 600);
+    });
+  });
+
+  let hydrated = false;
+  const hydrateBtn = document.getElementById('hydrate-btn');
+  const hydrateTrigger = document.getElementById('hydrate-trigger');
+  const hydrateStatus = document.getElementById('hydrate-status');
+  const hydrateMsg = document.getElementById('hydrate-msg');
+
+  hydrateBtn.addEventListener('click', () => {
+    if (!hydrated) {
+      hydrateMsg.textContent = 'See? The picture doesn’t listen yet — React hasn’t plugged in the wires.';
+      hydrateMsg.style.color = 'var(--warning)';
+    } else {
+      hydrateMsg.textContent = 'It works! Hydration connected your click to React.';
+      hydrateMsg.style.color = 'var(--success)';
+    }
+  });
+
+  hydrateTrigger.addEventListener('click', () => {
+    hydrated = true;
+    hydrateBtn.classList.add('hydrated');
+    hydrateStatus.textContent = 'Status: Hydrated — interactive';
+    hydrateStatus.classList.add('hydrated');
+    hydrateMsg.textContent = 'Try clicking the button again.';
+    hydrateMsg.style.color = 'var(--text-muted)';
+  });
+
+  function renderCache() {
+    const timeline = document.getElementById('cache-timeline');
+    timeline.innerHTML = '<div class="cache-step" data-step="0"><strong>Request #1</strong><span>Waiting…</span></div><div class="cache-step" data-step="1"><strong>Request #2</strong><span>Waiting…</span></div>';
+  }
+
+  document.getElementById('cache-run').addEventListener('click', () => {
+    const steps = document.querySelectorAll('.cache-step');
+    steps[0].classList.add('visible', 'cache-miss');
+    steps[0].querySelector('span').textContent = 'Cache MISS — “I don’t know yet!” → Ask database → Write answer in memory';
+    setTimeout(() => {
+      steps[1].classList.add('visible', 'cache-hit');
+      steps[1].querySelector('span').textContent = 'Cache HIT — “I remember!” → Fast answer, no database trip';
+    }, 1200);
+  });
+
+  const BUILDER_PIECES = ['Routing', 'Compiler', 'Bundler', 'Runtime', 'Renderer', 'Cache'];
+  const BUILDER_SLOTS = ['Routing', 'Compiler', 'Bundler', 'Runtime', 'Renderer', 'Cache'];
+
+  function renderBuilder() {
+    const bank = document.getElementById('piece-bank');
+    const slots = document.getElementById('builder-slots');
+    const result = document.getElementById('builder-result');
+    const filled = {};
+    BUILDER_SLOTS.forEach(label => {
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.dataset.slot = label;
+      slot.textContent = label;
+      slot.addEventListener('click', () => {
+        const piece = filled[label];
+        if (piece) {
+          delete filled[label];
+          slot.classList.remove('filled');
+          slot.textContent = label;
+          bank.appendChild(piece);
+          checkBuilder();
+        }
+      });
+      slots.appendChild(slot);
+    });
+    BUILDER_PIECES.forEach(name => {
+      const p = document.createElement('button');
+      p.type = 'button';
+      p.className = 'piece';
+      p.textContent = name;
+      p.addEventListener('click', () => {
+        const empty = [...slots.querySelectorAll('.slot')].find(s => !s.classList.contains('filled'));
+        if (!empty) return;
+        empty.classList.add('filled');
+        empty.textContent = name;
+        filled[empty.dataset.slot] = p;
+        p.remove();
+        checkBuilder();
+      });
+      bank.appendChild(p);
+    });
+    function checkBuilder() {
+      const count = Object.keys(filled).length;
+      if (count === BUILDER_SLOTS.length) {
+        result.innerHTML = '<strong style="color:var(--success)">You built a mini Next.js!</strong> Real tools use similar pieces: Hono (routes), React (UI), SWC (translator), Rspack (bundler), Redis (memory).';
+      } else {
+        result.textContent = 'Place all ' + BUILDER_SLOTS.length + ' pieces (' + count + '/' + BUILDER_SLOTS.length + ').';
+      }
+    }
+    checkBuilder();
+  }
+
+  function renderSummary() {
+    const steps = ['Source Code', 'Route Discovery', 'Dependency Graph', 'SWC', 'Server Components', 'Flight', 'Bundling', 'Runtime', 'Hydration'];
+    const root = document.getElementById('summary-roadmap');
+    steps.forEach((s, i) => {
+      const el = document.createElement('span');
+      el.className = 'road-step';
+      el.style.animationDelay = (i * 0.08) + 's';
+      el.textContent = s;
+      root.appendChild(el);
+      if (i < steps.length - 1) {
+        const arr = document.createElement('span');
+        arr.style.color = 'var(--text-muted)';
+        arr.textContent = ' → ';
+        root.appendChild(arr);
+      }
+    });
+  }
+
+  function appendSectionIllustrations() {
+    const s3h = document.querySelector('#s3 h2');
+    if (s3h) s3h.insertAdjacentHTML('afterend', '<div style="margin-bottom:1rem">' + createSectionIcon('graph') + '</div>');
+    const s4h = document.querySelector('#s4 h2');
+    if (s4h) s4h.insertAdjacentHTML('afterend', '<div style="margin-bottom:1rem">' + createSectionIcon('swc') + '</div>');
+    const s8h = document.querySelector('#s8 h2');
+    if (s8h) s8h.insertAdjacentHTML('afterend', '<div style="margin-bottom:1rem">' + createSectionIcon('bundle') + '</div>');
+  }
+
+  try {
+  initTheme();
+  initScrollProgress();
+  initKeyboardNav();
+  initStickyToc();
+  initGlossary();
+  renderPipeline();
+  renderRouteTree();
+  renderSwc();
+  renderClientTree();
+  renderBundler();
+  renderNextTree();
+  renderLifecycle();
+  renderLifecycleChart();
+  renderCache();
+  renderBuilder();
+  renderSummary();
+  appendSectionIllustrations();
+
+  window.addEventListener('resize', () => renderDepGraph());
+  setTimeout(renderDepGraph, 100);
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) e.target.style.opacity = '1';
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('section').forEach(s => {
+    s.style.opacity = '0.85';
+    s.style.transition = 'opacity 0.6s ease';
+    observer.observe(s);
+  });
+  } catch (err) {
+    console.error('[nextjs-under-the-hood]', err);
+    const main = document.getElementById('main');
+    if (main) {
+      const warn = document.createElement('p');
+      warn.setAttribute('role', 'alert');
+      warn.style.cssText = 'padding:1rem;margin:1rem;border:1px solid var(--danger);border-radius:8px;color:var(--text)';
+      warn.textContent = 'Something failed to initialize. Try a modern browser or refresh. Version ' + APP_VERSION;
+      main.prepend(warn);
+    }
+  }
+})();
+  </script>
+
+  <script>
+(function () {
+  'use strict';
+  try {
+    var $ = function (id) { return document.getElementById(id); };
+
+    // Middleware
+    var paths = ['/dashboard', '/login', '/old-blog', '/api/ping'], authed = false, cur = '/dashboard';
+    function mw() {
+      var m;
+      if (/^\/(api|_next)/.test(cur)) m = '<b class="warn">Skipped</b> — the matcher excludes this path, so middleware never runs.';
+      else if (cur.indexOf('/dashboard') === 0 && !authed) m = '<b class="bad">Redirect</b> → <code>/login</code>. Browser URL changes.';
+      else if (cur === '/old-blog') m = '<b class="ok">Rewrite</b> → serves <code>/blog</code>, browser still shows <code>/old-blog</code>.';
+      else m = '<b class="ok">next()</b> — request continues to the page.';
+      $('mw-out').innerHTML = '<code>' + cur + '</code> · ' + (authed ? 'logged in' : 'logged out') + '<br>' + m;
+    }
+    paths.forEach(function (p) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'module-chip' + (p === cur ? ' on' : ''); b.textContent = p;
+      b.onclick = function () { cur = p; $('mw-paths').querySelectorAll('.module-chip').forEach(function (x) { x.classList.toggle('on', x === b); }); mw(); };
+      $('mw-paths').appendChild(b);
+    });
+    $('mw-auth').onclick = function () { authed = !authed; this.classList.toggle('on', authed); this.textContent = 'Logged in: ' + (authed ? 'yes' : 'no'); mw(); };
+    mw();
+
+    // Server Actions
+    var saSteps = ['1 Browser POSTs form', '2 Server runs addTodo()', '3 Database write', '4 revalidatePath()', '5 Fresh UI streamed back'];
+    saSteps.forEach(function (s) { var d = document.createElement('span'); d.className = 'bx-step'; d.textContent = s; $('sa-steps').appendChild(d); });
+    var saNotes = ['The form data travels as a POST — no fetch code written by you.', 'This code never reaches the browser. Validate and authorize here.', 'Only the server can talk to the database.', 'Cached output for /todos is marked stale.', 'The page updates without a full reload.'];
+    $('sa-run').onclick = function () {
+      var els = $('sa-steps').children;
+      Array.prototype.forEach.call(els, function (e, i) {
+        e.classList.remove('on');
+        setTimeout(function () { Array.prototype.forEach.call(els, function (x) { x.classList.remove('on'); }); e.classList.add('on'); $('sa-out').textContent = saNotes[i]; }, i * 700);
+      });
+    };
+
+    // Streaming
+    function bind(r, v) { $(r).oninput = function () { $(v).textContent = this.value + ' ms'; }; }
+    bind('st-r1', 'st-v1'); bind('st-r2', 'st-v2');
+    $('st-run').onclick = function () {
+      var d = [0, +$('st-r1').value, +$('st-r2').value], max = 3000, timers = [];
+      for (var i = 0; i < 3; i++) { $('st-b' + i).style.transition = 'none'; $('st-b' + i).style.width = '0%'; $('st-t' + i).textContent = 'waiting…'; }
+      void $('st-b0').offsetWidth;
+      d.forEach(function (ms, i) {
+        $('st-b' + i).style.transition = 'width ' + (ms || 150) + 'ms linear'; $('st-b' + i).style.width = '100%';
+        setTimeout(function () { $('st-t' + i).textContent = 'visible at ' + ms + ' ms'; }, ms || 150);
+      });
+      $('st-note').textContent = 'Streaming: first content at ~0 ms. Without it: nothing until ' + Math.max(d[1], d[2]) + ' ms.';
+    };
+
+    // Rendering strategies
+    function rs() {
+      var w = $('rs-who').value, f = $('rs-freq').value, t;
+      if (w === 'user') t = '<b class="warn">SSR</b> — content depends on the user, so render per request (cache the data pieces, not the page).';
+      else if (w === 'mixed') t = '<b class="ok">PPR</b> (or static + Suspense) — static shell, personalized holes streamed in.';
+      else t = f === 'rare' ? '<b class="ok">SSG</b> — build once, serve from the CDN.' : '<b class="ok">ISR</b> — static speed with <code>revalidate</code> or on-demand refresh.';
+      $('rs-out').innerHTML = t;
+    }
+    $('rs-who').onchange = rs; $('rs-freq').onchange = rs; rs();
+
+    // Runtimes
+    var needs = ['Read files (fs)', 'Native module', 'TCP database driver', 'Lowest latency worldwide', 'Simple auth/redirect logic'], on = {};
+    function rt() {
+      var node = on[0] || on[1] || on[2], edgeOnly = on[3] && !node;
+      $('rt-out').innerHTML = node ? '<b class="warn">Node.js runtime</b> — you need APIs the Edge runtime does not offer.'
+        : (on[3] || on[4]) ? '<b class="ok">Edge runtime</b> — small, fast, close to users.'
+        : 'Pick what your code needs. With no special needs, Node is the safe default.';
+    }
+    needs.forEach(function (n, i) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'module-chip'; b.textContent = n;
+      b.onclick = function () { on[i] = !on[i]; b.classList.toggle('on', !!on[i]); rt(); };
+      $('rt-needs').appendChild(b);
+    });
+    rt();
+  } catch (e) { console.error('[bonus chapters]', e); }
+})();
+  </script>
+
+  <script>
+(function () {
+  'use strict';
+  try {
+    var $ = function (i) { return document.getElementById(i); };
+    var url = function (id) { return location.href.split('#')[0] + (id ? '#' + id : ''); };
+    var T = [
+      'How does Next.js turn your code into a website? 🧵\n\nFolders → routes → dependency graph → compile → server render → bundle → browser → hydrate → cache.\n\nAn interactive guide, one HTML file, no install:',
+      '1/ Routes are folders.\n\napp/about/page.tsx becomes /about. [slug] folders become wildcards. There is no routes file; the folder tree is the map.',
+      '2/ Components run on the server by default.\n\nServer Components can read your database and ship zero JS. Add "use client" only where you need clicks, state or effects.',
+      '3/ The server sends "Flight", not code.\n\nIt streams small instructions (build Hero here, pass these props). The browser follows them. Your server code never ships.',
+      '4/ Hydration wakes the page up.\n\nYou see HTML first. React then attaches click handlers. A hydration mismatch means server and client rendered different things.',
+      '5/ Middleware runs before the page.\n\nIt can redirect, rewrite or pass through, but only for URLs your matcher allows. Keep it small and fast.',
+      '6/ Streaming beats waiting.\n\nWrap slow parts in Suspense. Users see the shell instantly while slow data fills in.',
+      '7/ Pick rendering per route.\n\nSSG = built once. ISR = static, refreshed later. SSR = built per request. PPR = static shell + dynamic holes.',
+      '8/ Stale data is usually a cache rule, not a React bug.\n\nWhen stuck, ask: is this build time, request time, or browser time?'
+    ];
+    var list = $('th-list');
+    T.forEach(function (t, i) {
+      var c = document.createElement('div'); c.className = 'th-card';
+      c.innerHTML = '<span class="n">' + (i + 1) + '</span><p></p><small>' + t.length + '/280</small> ';
+      c.querySelector('p').textContent = t;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'sh-btn'; b.textContent = 'Copy';
+      b.onclick = function () { (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function () { b.textContent = 'Copied ✓'; setTimeout(function () { b.textContent = 'Copy'; }, 1500); }, function () { b.textContent = 'Select text'; }); };
+      c.appendChild(b); list.appendChild(c); T[i] = t;
+    });
+    $('th-all').onclick = function () {
+      var b = this; navigator.clipboard && navigator.clipboard.writeText(T.join('\n\n---\n\n')).then(function () { b.textContent = 'Copied ✓'; setTimeout(function () { b.textContent = 'Copy whole thread'; }, 1500); });
+    };
+    $('th-first').href = 'https://x.com/intent/post?text=' + encodeURIComponent(T[0]) + '&url=' + encodeURIComponent(url());
+
+    // per-section share buttons
+    document.querySelectorAll('main section[id]').forEach(function (sec) {
+      if (sec.id === 'thread' || sec.id === 's16') return;
+      var h = sec.querySelector('h2'), d = sec.querySelector('.section-desc'); if (!h) return;
+      var bar = document.createElement('div'); bar.className = 'sh-bar';
+      var txt = h.textContent + ': ' + (d ? d.textContent : '');
+      var x = document.createElement('a'); x.className = 'sh-btn'; x.target = '_blank'; x.rel = 'noopener'; x.textContent = 'Share on X';
+      x.href = 'https://x.com/intent/post?text=' + encodeURIComponent(txt.slice(0, 220)) + '&url=' + encodeURIComponent(url(sec.id));
+      var c = document.createElement('button'); c.type = 'button'; c.className = 'sh-btn'; c.textContent = 'Copy link';
+      c.onclick = function () { navigator.clipboard && navigator.clipboard.writeText(url(sec.id)).then(function () { c.textContent = 'Copied ✓'; setTimeout(function () { c.textContent = 'Copy link'; }, 1500); }); };
+      bar.appendChild(x); bar.appendChild(c);
+      (d || h).insertAdjacentElement('afterend', bar);
+    });
+
+    // reading time
+    var words = document.getElementById('main').innerText.split(/\s+/).length;
+    $('read-time').textContent = '≈ ' + Math.max(1, Math.round(words / 220)) + ' min to read everything · ' + document.querySelectorAll('main section[id]').length + ' sections';
+
+    // floating share
+    var f = document.createElement('a'); f.className = 'sh-btn sh-fab'; f.target = '_blank'; f.rel = 'noopener'; f.textContent = 'Share on X';
+    f.href = 'https://x.com/intent/post?text=' + encodeURIComponent('Inside Next.js: an interactive, visual guide from source code to browser') + '&url=' + encodeURIComponent(url());
+    document.body.appendChild(f);
+  } catch (e) { console.error('[share]', e); }
+})();
+  </script>
+
+  <script>
+(function () {
+  'use strict';
+  try {
+    function guide(sel, title, steps, big) {
+      var t = document.querySelector(sel); if (!t) return;
+      var d = document.createElement('details'); d.className = 'eli5'; d.open = true;
+      d.innerHTML = '<summary>👶 How to read this picture: ' + title + '</summary><ol>' +
+        steps.map(function (x) { return '<li><span class="e">' + x[0] + '</span><span>' + x[1] + '</span></li>'; }).join('') +
+        '</ol><p class="big">' + big + '</p>';
+      t.insertAdjacentElement('beforebegin', d);
+    }
+    guide('#pipeline-panel', 'the factory line', [
+      ['👈', 'The boxes are <strong>jobs</strong>. Your code starts at the first box and moves down the line.'],
+      ['👆', '<strong>Tap any box.</strong> A box on the right tells you what that job does.'],
+      ['🎈', 'The first box is you writing. The last box is the page working on screen.']
+    ], 'Big idea: a website is made step by step, like a toy on a factory belt.');
+    guide('#dep-graph', 'the LEGO map', [
+      ['⭕', 'Every <strong>circle is one LEGO piece</strong> (a part of the page).'],
+      ['➡️', 'An <strong>arrow means “needs this piece”</strong>. page.tsx needs Header, Hero and Dashboard.'],
+      ['👆', '<strong>Tap a circle.</strong> It and all the pieces it needs turn blue.'],
+      ['🔢', 'The numbers underneath count the pieces. Fewer pieces = lighter and faster.']
+    ], 'Big idea: a big page is just small pieces holding hands.');
+    guide('#chunk-bars', 'the suitcase bars', [
+      ['🧳', 'Each bar is <strong>one suitcase</strong> of code.'],
+      ['📏', '<strong>Longer bar = heavier suitcase</strong> = slower to carry to the browser.'],
+      ['👆', 'Tap the pieces above to take them out or put them back. Watch the bars shrink and grow.']
+    ], 'Big idea: only pack what you need, so the trip is quick.');
+    guide('.bundler-compare', 'the race bars', [
+      ['🏃', 'Two racers clean up after you change <strong>one file</strong>.'],
+      ['🟦', 'The bar fills up as they work. <strong>Short wait = a fast racer.</strong>'],
+      ['👆', 'Press “Save Header.tsx” and see who finishes first.']
+    ], 'Big idea: Turbopack only cleans the corner you touched, so you wait less.');
+    guide('#lifecycle-chart', 'the letter trip', [
+      ['⚪', 'Each circle is <strong>a stop</strong> on a trip. The number says the order: 1, 2, 3…'],
+      ['🔵', 'The <strong>moving blue dot is your request</strong>, like a letter going from stop to stop.'],
+      ['↩️', 'The page comes back to you at the end and wakes up.']
+    ], 'Big idea: opening one page is a little journey with many helpers.');
+    guide('#cache-timeline', 'remembering', [
+      ['🟧', '<strong>Orange = MISS</strong>: “I do not know this yet.” Go ask the library (slow).'],
+      ['🟩', '<strong>Green = HIT</strong>: “I remember!” Answer right away (fast).'],
+      ['👆', 'Press “Simulate two requests” to see the first slow, the second fast.']
+    ], 'Big idea: remember the answer so you do not have to ask twice.');
+    guide('#client-tree', 'the backpack meter', [
+      ['🎒', 'The big number is how <strong>heavy your backpack</strong> (download) is.'],
+      ['🎮', 'Tap a name below to make it <strong>interactive</strong>. Interactive parts add weight.'],
+      ['📊', 'The bar fills up as the backpack gets heavier.']
+    ], 'Big idea: only make things clickable if they really need to be.');
+  } catch (e) { console.error('[eli5]', e); }
+})();
+  </script>
+</body>
+</html>
